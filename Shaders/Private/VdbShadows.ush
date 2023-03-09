@@ -1,0 +1,63 @@
+// Copyright Thibault Lambert
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http ://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#define SUPPORT_CONTACT_SHADOWS 0
+
+#define DYNAMICALLY_SHADOWED 1
+#define TREAT_MAXDEPTH_UNSHADOWED 1
+
+#define SHADOW_QUALITY 2
+#define NO_TRANSLUCENCY_AVAILABLE
+
+#define VOLUME_SHADOW_SAMPLING_INPUT 0
+
+#define VIRTUAL_SHADOW_MAP 1
+
+// Forward Lighting Data
+#define ForwardLightData VdbParams.ForwardLightData
+#include "/Engine/Private/LightGridCommon.ush"
+#include "/Engine/Private/DeferredLightingCommon.ush"
+#include "/Engine/Private/LightData.ush"
+
+// Shadow maps
+#include "/Engine/Private/ShadowProjectionCommon.ush"
+#include "/Engine/Private/ShadowFilteringCommon.ush"
+
+#define Light0Shadow VdbParams
+#include "/Engine/Private/VolumeLightingCommonSampling.ush"
+#include "/Engine/Private/ForwardShadowingCommon.ush"
+
+// Virtual shadow maps
+#include "/Engine/Private/VirtualShadowMaps/VirtualShadowMapProjectionCommon.ush"
+
+float ComputeShadows(float3 TranslatedWorldPos, float SceneDepth)
+{
+#if 1 // VOLUME SHADOWING
+		bool bUnused;
+		float OpaqueShadow = ComputeLight0VolumeShadowing(TranslatedWorldPos, false, false, bUnused);
+#else // FORWARD SHADOWING
+		float OpaqueShadow = ComputeDirectionalLightStaticShadowing(TranslatedWorldPos);
+		bool bUnused = false;
+		OpaqueShadow *= ComputeDirectionalLightDynamicShadowing(TranslatedWorldPos, DeviceZ, bUnused);
+#endif // SHADOW_MAP
+#if VIRTUAL_SHADOW_MAP
+		if (VdbParams.VirtualShadowMapId != INDEX_NONE)
+		{
+			FVirtualShadowMapSampleResult VirtualShadowMapSample = SampleVirtualShadowMapTranslatedWorld(ForwardLightData.DirectionalLightVSM, TranslatedWorldPos);
+			OpaqueShadow *= VirtualShadowMapSample.ShadowFactor;
+		}
+#endif // VIRTUALSHADOW_MAP
+	return OpaqueShadow;
+
+}

@@ -28,6 +28,9 @@
 #include "SceneView.h"
 #include "ScenePrivate.h"
 
+#include "VolumeLighting.h"
+#include "VolumetricFog.h"
+
 DEFINE_LOG_CATEGORY(LogSparseVolumetrics);
 
 //-----------------------------------------------------------------------------
@@ -393,6 +396,11 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			return ViewMat.TransformPosition(LeftProxyCenter).Z > ViewMat.TransformPosition(RightProxyCenter).Z; // back to front
 		});
 
+	const FViewInfo* ViewInfo = static_cast<const FViewInfo*>(View);
+	const FSceneViewFamily* ViewFamily = View->Family;
+	const FScene* Scene = (FScene*)ViewFamily->Scene;
+	FLightSceneInfo* SimpleDirectional = Scene->SimpleDirectionalLight;
+
 	auto DrawVdbProxies = [&](const TArray<FVdbMaterialSceneProxy*>& Proxies, bool Translucent, TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer, FRDGTexture* RenderTexture)
 	{
 		FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
@@ -411,6 +419,29 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			PassParameters->RenderTargets[0] = FRenderTargetBinding(Parameters.ColorTexture, ERenderTargetLoadAction::ELoad);
 			PassParameters->RenderTargets.DepthStencil =
 				FDepthStencilBinding(Parameters.DepthTexture, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthWrite_StencilNop);
+		}
+
+		//if (bSampleVirtualShadowMap)
+		{
+			if (SimpleDirectional != nullptr)
+			{
+				const FVisibleLightInfo& Light0 = Parameters.VisibleLightInfos[SimpleDirectional->Id];
+				const FProjectedShadowInfo* ProjectedShadowInfo = GetShadowForInjectionIntoVolumetricFog(Light0);
+				bool bDynamicallyShadowed = ProjectedShadowInfo != NULL;
+				if (bDynamicallyShadowed)
+				{
+					GetVolumeShadowingShaderParameters(GraphBuilder, *ViewInfo, SimpleDirectional, ProjectedShadowInfo, PassParameters->VolumeShadowingShaderParameters);
+				}
+				else
+				{
+					SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, PassParameters->VolumeShadowingShaderParameters);
+				}
+			}
+			else
+			{
+				SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, PassParameters->VolumeShadowingShaderParameters);
+			}
+			PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
 		}
 
 		GraphBuilder.AddPass(
@@ -481,6 +512,14 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 	UniformParameters->SceneDepthTexture = Parameters.DepthTexture;
 	UniformParameters->Threshold = FMath::Max(0.0, FVdbCVars::CVarVolumetricVdbThreshold.GetValueOnAnyThread());
 	UniformParameters->LinearTexSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+	UniformParameters->ShadowStepSize = 8.f;
+	UniformParameters->VirtualShadowMapId = SimpleDirectional ? Parameters.VisibleLightInfos[SimpleDirectional->Id].GetVirtualShadowMapId(ViewInfo) : -1;
+	UniformParameters->ForwardLightData = *ViewInfo->ForwardLightingResources.ForwardLightData;
+
+	FVolumeShadowingShaderParametersGlobal0 LightShadowShaderParams0;
+	SetVolumeShadowingDefaultShaderParameters(GraphBuilder, LightShadowShaderParams0);
+	UniformParameters->Light0Shadow = LightShadowShaderParams0;
+
 	TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(UniformParameters);
 
 	if (!OpaqueProxies.IsEmpty())

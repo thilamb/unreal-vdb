@@ -17,6 +17,9 @@
 #include "VdbCommon.h"
 #include "MeshMaterialShader.h"
 #include "InstanceCulling/InstanceCullingMergedContext.h"
+#include "VirtualShadowMaps/VirtualShadowMapArray.h"
+#include "SceneRendering.h"
+#include "VolumeLighting.h"
 
 THIRD_PARTY_INCLUDES_START
 #include <nanovdb/NanoVDB.h>
@@ -75,10 +78,17 @@ BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbShaderParams, )
 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthTexture)
 	SHADER_PARAMETER_SAMPLER(SamplerState, LinearTexSampler)
 	SHADER_PARAMETER(float, Threshold)
+
+	SHADER_PARAMETER(float, ShadowStepSize)
+	SHADER_PARAMETER(int32, VirtualShadowMapId)
+	SHADER_PARAMETER_STRUCT(FForwardLightData, ForwardLightData)
+	SHADER_PARAMETER_STRUCT_INCLUDE(FVolumeShadowingShaderParametersGlobal0, Light0Shadow)
 END_GLOBAL_SHADER_PARAMETER_STRUCT()
 
 BEGIN_SHADER_PARAMETER_STRUCT(FVdbShaderParametersPS, )
 	SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+	SHADER_PARAMETER_STRUCT_INCLUDE(FVolumeShadowingShaderParameters, VolumeShadowingShaderParameters)
+	SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
 	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FVdbShaderParams, VdbUniformBuffer)
 	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FInstanceCullingGlobalUniforms, InstanceCulling)
 	RENDER_TARGET_BINDING_SLOTS()
@@ -135,6 +145,10 @@ public:
 		OutEnvironment.SetDefine(TEXT("USE_FORCE_TEXTURE_MIP"), TEXT("1"));
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MAJOR"), NANOVDB_MAJOR_VERSION_NUMBER);
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MINOR"), NANOVDB_MINOR_VERSION_NUMBER);
+
+		//const bool bSupportVirtualShadowMap = IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+		FVirtualShadowMapArray::SetShaderDefines(OutEnvironment);
+		//FForwardLightingParameters::ModifyCompilationEnvironment(Parameters.Platform, OutEnvironment);
 	}
 
 	void GetShaderBindings(

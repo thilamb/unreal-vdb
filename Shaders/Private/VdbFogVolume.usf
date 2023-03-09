@@ -18,6 +18,7 @@
 #include "/Engine/Private/ReflectionEnvironmentShared.ush"
 #include "/Engine/Generated/Material.ush"
 #include "/Engine/Generated/VertexFactory.ush"
+#include "/Plugin/VdbVolume/Private/VdbShadows.ush"
 
 int4 CustomIntData0;
 int4 CustomIntData1;
@@ -80,6 +81,7 @@ float4 RaymarchFogVolume(
 	pnanovdb_vec3_t bbox_max,
 
 	VdbRay Ray,
+	float DeviceZ,
 	RandomSequence RandSequence,
 	FMaterialPixelParameters MaterialParameters,
 	float4x4 LocalToWorld,
@@ -175,6 +177,8 @@ float4 RaymarchFogVolume(
 	#else
 		float3 Color = 1.0;
 	#endif
+		
+		float OpaqueShadow = ComputeShadows(TranslatedWorldPos, DeviceZ);
 
 		// Only support single directional lighting.
 		{
@@ -188,7 +192,7 @@ float4 RaymarchFogVolume(
 			{
 				ShadowTransmittance = Average(ShadowTransmittance);
 			}
-			StepRadiance += StepTransmittance * Scattering * LightCol * ShadowTransmittance * PhaseHG(CosThetaPhase, ANISOTROPY) * Color;
+			StepRadiance += OpaqueShadow * StepTransmittance * Scattering * LightCol * ShadowTransmittance * PhaseHG(CosThetaPhase, ANISOTROPY) * Color;
 		}
 
 	// Ambient light contribution (skylight aka environment light)
@@ -328,7 +332,7 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 							#if USE_COLOR_VDB
 								ColorSampler,
 							#endif
-							bbox_min, bbox_max, iRay, 
+							bbox_min, bbox_max, iRay, DeviceZ,
 							RandSequence, MaterialParameters, 
 							LocalToWorld, WorldToLocal, SvPosition);
 	}
