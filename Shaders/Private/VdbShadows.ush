@@ -28,7 +28,7 @@
 #define ForwardLightData VdbParams.ForwardLightData
 #include "/Engine/Private/LightGridCommon.ush"
 #include "/Engine/Private/DeferredLightingCommon.ush"
-#include "/Engine/Private/LightData.ush"
+//#include "/Engine/Private/LightData.ush"
 
 // Shadow maps
 #include "/Engine/Private/ShadowProjectionCommon.ush"
