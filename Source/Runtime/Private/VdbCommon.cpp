@@ -23,6 +23,11 @@ TAutoConsoleVariable<bool> FVdbCVars::CVarVolumetricVdb(
 	TEXT("VolumetricVdb components are rendered when true, otherwise ignored."),
 	ECVF_RenderThreadSafe);
 
+TAutoConsoleVariable<bool> FVdbCVars::CVarVolumetricVdbWriteDepth(
+	TEXT("r.Vdb.WriteDepth"), true,
+	TEXT("Choose if VolumetricVdb components are writing to depth."),
+	ECVF_RenderThreadSafe);
+
 TAutoConsoleVariable<bool> FVdbCVars::CVarVolumetricVdbTrilinear(
 	TEXT("r.Vdb.Trilinear"), false,
 	TEXT("Force Trilinear sampling on all Vdb volumes."),

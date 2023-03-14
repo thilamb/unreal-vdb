@@ -42,6 +42,7 @@ DECLARE_CYCLE_STAT(TEXT("RT GetDynMeshElements"), STAT_VdbSceneProxy_GetDynamicM
 struct FVdbCVars
 {
 	static TAutoConsoleVariable<bool> CVarVolumetricVdb;
+	static TAutoConsoleVariable<bool> CVarVolumetricVdbWriteDepth;
 	static TAutoConsoleVariable<bool> CVarVolumetricVdbTrilinear;
 	static TAutoConsoleVariable<int32> CVarVolumetricVdbCinematicQuality;
 	static TAutoConsoleVariable<int32> CVarVolumetricVdbDenoiser;

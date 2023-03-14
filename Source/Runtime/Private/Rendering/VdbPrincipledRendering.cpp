@@ -378,20 +378,20 @@ void FVdbPrincipledRendering::Render_RenderThread(FPostOpaqueRenderParameters& P
 		// Render into user friendly RenderTarget, if it exists
 		if (VdbDefaultRenderTexture)
 		{
-			VdbComposite::CompositeFullscreen(GraphBuilder, VdbCurrRenderTexture, VdbDefaultRenderTexture, View, FirstRender, true);
+			VdbComposite::CompositeFullscreen(GraphBuilder, VdbCurrRenderTexture, VdbDefaultRenderTexture, nullptr, nullptr, View, FirstRender, true);
 			FirstRender = false;
 		}
 		else
 		{
 			// Composite VDB offscreen rendering onto back buffer
-			VdbComposite::CompositeFullscreen(GraphBuilder, VdbCurrRenderTexture, Parameters.ColorTexture, View);
+			VdbComposite::CompositeFullscreen(GraphBuilder, VdbCurrRenderTexture, Parameters.ColorTexture, nullptr, nullptr, View);
 		}
 	}
 
 	if (VdbDefaultRenderTexture && !FirstRender)
 	{
 		// Composite VDB offscreen rendering onto back buffer
-		VdbComposite::CompositeFullscreen(GraphBuilder, VdbDefaultRenderTexture, Parameters.ColorTexture, View);
+		VdbComposite::CompositeFullscreen(GraphBuilder, VdbDefaultRenderTexture, Parameters.ColorTexture, nullptr, nullptr, View);
 	}
 }
 

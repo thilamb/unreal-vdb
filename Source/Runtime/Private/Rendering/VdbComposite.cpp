@@ -33,7 +33,8 @@ public:
 	SHADER_USE_PARAMETER_STRUCT(FCompositePS, FGlobalShader);
 
 	class FDisplayMethod : SHADER_PERMUTATION_INT("DEBUG_DISPLAY", 3);
-	using FPermutationDomain = TShaderPermutationDomain<FDisplayMethod>;
+	class FUseDepth : SHADER_PERMUTATION_BOOL("USE_DEPTH");
+	using FPermutationDomain = TShaderPermutationDomain<FDisplayMethod, FUseDepth>;
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
@@ -49,13 +50,14 @@ public:
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, ViewUniformBuffer)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputTexture)
 		SHADER_PARAMETER_SAMPLER(SamplerState, InputSampler)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, DepthTexture)
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 };
 
 IMPLEMENT_SHADER_TYPE(, FCompositePS, TEXT("/Plugin/VdbVolume/Private/VdbComposite.usf"), TEXT("MainPS"), SF_Pixel)
 
-void VdbComposite::CompositeFullscreen(FRDGBuilder& GraphBuilder, FRDGTexture* InputTexture, FRDGTexture* OutTexture, const FSceneView* View, bool ForceClear, bool ForceRegularAlpha)
+void VdbComposite::CompositeFullscreen(FRDGBuilder& GraphBuilder, FRDGTexture* InputTexture, FRDGTexture* OutTexture, FRDGTexture* InDepthTexture, FRDGTexture* OutDepthTexture, const FSceneView* View, bool ForceClear, bool ForceRegularAlpha)
 {
 	static uint32 LastFrame = 0;
 
@@ -79,10 +81,17 @@ void VdbComposite::CompositeFullscreen(FRDGBuilder& GraphBuilder, FRDGTexture* I
 	PassParameters->ViewUniformBuffer = View->ViewUniformBuffer;
 	PassParameters->InputTexture = InputTexture;
 	PassParameters->InputSampler = TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+	PassParameters->DepthTexture = InDepthTexture ? InDepthTexture : InputTexture;
 	PassParameters->RenderTargets[0] = FRenderTargetBinding(OutTexture, Clear ? ERenderTargetLoadAction::EClear : ERenderTargetLoadAction::ELoad);
+	if (InDepthTexture)
+	{
+		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
+			OutDepthTexture, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthWrite_StencilNop);
+	}
 
 	FCompositePS::FPermutationDomain PermutationVector;
 	PermutationVector.Set<FCompositePS::FDisplayMethod>(DebugDisplayMode);
+	PermutationVector.Set < FCompositePS::FUseDepth>(InDepthTexture != nullptr);
 
 	FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(GMaxRHIFeatureLevel);
 	TShaderMapRef<FCompositePS> PixelShader(GlobalShaderMap, PermutationVector);
@@ -108,6 +117,9 @@ void VdbComposite::CompositeFullscreen(FRDGBuilder& GraphBuilder, FRDGTexture* I
 		BlendState = TStaticBlendState<CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_One, BF_InverseSourceAlpha>::GetRHI();
 	}
 
+	// Write closer depth values only
+	FRHIDepthStencilState* DepthStencilState = TStaticDepthStencilState<true, CF_DepthNearOrEqual>::GetRHI();
+
 	FPixelShaderUtils::AddFullscreenPass(
 		GraphBuilder,
 		GlobalShaderMap,
@@ -115,5 +127,7 @@ void VdbComposite::CompositeFullscreen(FRDGBuilder& GraphBuilder, FRDGTexture* I
 		PixelShader,
 		PassParameters,
 		Viewport,
-		BlendState);
+		BlendState,
+		nullptr,
+		InDepthTexture ? DepthStencilState : nullptr);
 }

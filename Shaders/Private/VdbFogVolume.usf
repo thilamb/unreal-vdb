@@ -86,7 +86,8 @@ float4 RaymarchFogVolume(
 	FMaterialPixelParameters MaterialParameters,
 	float4x4 LocalToWorld,
 	float4x4 WorldToLocal,
-	float4 SvPosition)
+	float4 SvPosition,
+	out float3 FirstIntersection)
 {
 	// ------------------------------------------------------------------------
 	// Test against volume, and update Ray start/end to fit volume
@@ -117,8 +118,10 @@ float4 RaymarchFogVolume(
 	float StepWorldMeters = LOCAL_STEP_SIZE * CENTIMETER_TO_METER;
 
 	FPixelMaterialInputs PixelMaterialInputs = (FPixelMaterialInputs)0;
+	
+	float FirstIntersectionS = 100000000000000000000000000000000000000000000000.0; // absurdly large value
 
-	for (uint iStep = 0; iStep < NumSteps; ++iStep)
+	LOOP for (uint iStep = 0; iStep < NumSteps; ++iStep)
 	{
 		float s = Ray.TMin + (iStep + lerp(0.5, RandomSequence_GenerateSample1D(RandSequence), JITTER_MULT)) * StepSize;
 		pnanovdb_vec3_t iPos = pnanovdb_hdda_ray_start(Ray.Origin, s, Ray.Direction);
@@ -140,7 +143,9 @@ float4 RaymarchFogVolume(
 
 		float Density = SAMPLING_FLOAT_FILTERING(iPos - Displacement, DensitySampler.GridBuffer, DensitySampler.GridType, DensitySampler.Accessor);
 		Density = UpdateDensity(Density, DENSITY_MULT, DensityModifications);
-		if (Density == 0.0) continue; 
+		if (Density == 0.0) continue;
+
+		FirstIntersectionS = min(FirstIntersectionS, s);
 
 		// Compute scattering and absorption coefficients
 		float3 Extinction = SigmaT * Density;
@@ -194,7 +199,7 @@ float4 RaymarchFogVolume(
 			}
 			StepRadiance += OpaqueShadow * StepTransmittance * Scattering * LightCol * ShadowTransmittance * PhaseHG(CosThetaPhase, ANISOTROPY) * Color;
 		}
-
+		
 	// Ambient light contribution (skylight aka environment light)
 	#if NICER_BUT_EXPENSIVE_ENVLIGHT
 		{
@@ -258,6 +263,11 @@ float4 RaymarchFogVolume(
 		}
 	}
 	
+	// Re-doing computation at the end to avoid weird issue when trilinear sampling is enabled.
+	pnanovdb_vec3_t iPos = pnanovdb_hdda_ray_start(Ray.Origin, FirstIntersectionS, Ray.Direction);
+	float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
+	FirstIntersection = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
+	
 	return float4(Radiance, 1.0 - Average(Transmittance));
 }
 
@@ -265,9 +275,10 @@ float4 RaymarchFogVolume(
 //#if PIXELSHADER
 //-----------------------------------------------------------------------------
 
-void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position, 
-	in FVertexFactoryInterpolantsVSToPS FactoryInterpolants, 
-	out float4 OutColor0 : SV_Target0
+void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
+	in FVertexFactoryInterpolantsVSToPS FactoryInterpolants,
+	out float4 OutColor0 : SV_Target0,
+	out float OutDepth : SV_Depth // TODO: make this shader variation
 )
 {
 	ResolvedView = ResolveView();
@@ -302,6 +313,8 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 
 	uint LinearIndex = SvPosition.y * ResolvedView.BufferSizeAndInvSize.x + SvPosition.x;
 
+	float3 FirstIntersection = 0.0; // Translated world space
+
 	// ------------------------------------------------------------------------
 	// Trace rays and accumulate
 	
@@ -333,8 +346,8 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 								ColorSampler,
 							#endif
 							bbox_min, bbox_max, iRay, DeviceZ,
-							RandSequence, MaterialParameters, 
-							LocalToWorld, WorldToLocal, SvPosition);
+							RandSequence, MaterialParameters,
+							LocalToWorld, WorldToLocal, SvPosition, FirstIntersection);
 	}
 
 	Radiance /= SAMPLES_PER_PIXEL_FLOAT;
@@ -347,4 +360,14 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 	Radiance.rgb *= ResolvedView.RealTimeReflectionCapture ? ResolvedView.RealTimeReflectionCapturePreExposure : ResolvedView.PreExposure;
 
 	OutColor0 = Radiance;
+
+	// Output Depth to improve TAA and TSR. This will cause issues when VDB is transparent but we'll live with the consequences. 
+	// TODO: make this a shader variation.
+	float SceneDepth = 1.0;
+	if (any(FirstIntersection != 0.0))
+	{
+		float4 ClipPos = mul(float4(FirstIntersection, 1.0), ResolvedView.TranslatedWorldToClip);
+		SceneDepth = ClipPos.z / ClipPos.w;
+	}
+	OutDepth = SceneDepth;
 }

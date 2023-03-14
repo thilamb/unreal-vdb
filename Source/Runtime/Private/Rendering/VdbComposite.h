@@ -22,5 +22,10 @@ class FSceneView;
 
 namespace VdbComposite
 {
-	void CompositeFullscreen(FRDGBuilder& GraphBuilder, FRDGTexture* InputTexture, FRDGTexture* OutTexture, const FSceneView* View, bool ForceClear = false, bool ForceRegularAlpha = true);
+	void CompositeFullscreen(
+		FRDGBuilder& GraphBuilder, 
+		FRDGTexture* InputTexture, FRDGTexture* OutTexture, 
+		FRDGTexture* InDepthTexture, FRDGTexture* OutDepthTexture, 
+		const FSceneView* View, 
+		bool ForceClear = false, bool ForceRegularAlpha = true);
 };

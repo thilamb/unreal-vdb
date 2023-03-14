@@ -16,8 +16,14 @@
 
 Texture2D InputTexture;
 SamplerState InputSampler;
+Texture2D DepthTexture;
 
-void MainPS(float4 SvPosition : SV_POSITION, out float4 OutColor : SV_Target0)
+void MainPS(float4 SvPosition : SV_POSITION
+			, out float4 OutColor : SV_Target0
+#if USE_DEPTH
+			, out float OutDepth : SV_Depth
+#endif
+			)
 {
 	float2 BufferUV = SvPosition.xy * View.BufferSizeAndInvSize.zw;
 	float4 RadianceAndThroughput = InputTexture.SampleLevel(InputSampler, BufferUV, 0);
@@ -28,5 +34,9 @@ void MainPS(float4 SvPosition : SV_POSITION, out float4 OutColor : SV_Target0)
 	OutColor = float4(RadianceAndThroughput.aaa, RadianceAndThroughput.a);
 #else
 	OutColor = float4(RadianceAndThroughput.rgb, RadianceAndThroughput.a);
+#endif
+
+#if USE_DEPTH
+	OutDepth = DepthTexture.Load(int3(SvPosition.xy, 0)).x;
 #endif
 }

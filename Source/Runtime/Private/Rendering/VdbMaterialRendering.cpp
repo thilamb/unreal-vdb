@@ -32,6 +32,7 @@
 #include "VolumetricFog.h"
 
 DEFINE_LOG_CATEGORY(LogSparseVolumetrics);
+DECLARE_GPU_STAT_NAMED(StatVdbMaterial, TEXT("Vdb Material Rendering"));
 
 //-----------------------------------------------------------------------------
 //--- FVdbMeshProcessor
@@ -47,6 +48,7 @@ public:
 		bool IsLevelSet, bool IsTranslucentLevelSet,
 		bool ImprovedSkylight,
 		bool TrilinearSampling,
+		bool WriteDepth,
 		bool UseTempVdb, bool UseColorVdb,
 		FVdbElementData&& ShaderElementData)
 		: FMeshPassProcessor(Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
@@ -66,7 +68,15 @@ public:
 		else
 		{
 			PassDrawRenderState.SetBlendState(TStaticBlendState<CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_One, BF_InverseSourceAlpha>::GetRHI()); // premultiplied alpha blending
-			PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<false, CF_DepthNearOrEqual>::GetRHI());
+			if (WriteDepth) 
+			{
+				PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<true, CF_DepthNearOrEqual>::GetRHI());
+			}
+			else
+			{
+				PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<false, CF_DepthNearOrEqual>::GetRHI());
+			}
+
 		}
 
 		int32 CinematicMode = FVdbCVars::CVarVolumetricVdbCinematicQuality.GetValueOnAnyThread();
@@ -377,6 +387,9 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 
 	SCOPE_CYCLE_COUNTER(STAT_VdbRendering_RT);
 
+	RDG_EVENT_SCOPE(*Parameters.GraphBuilder, "Vdb Material Rendering");
+	RDG_GPU_STAT_SCOPE(*Parameters.GraphBuilder, StatVdbMaterial);
+
 	const FSceneView* View = static_cast<FSceneView*>(Parameters.Uid);
 
 	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return !Proxy->IsTranslucent() && Proxy->IsVisible(View); });
@@ -401,9 +414,11 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 	const FScene* Scene = (FScene*)ViewFamily->Scene;
 	FLightSceneInfo* SimpleDirectional = Scene->SimpleDirectionalLight;
 
-	auto DrawVdbProxies = [&](const TArray<FVdbMaterialSceneProxy*>& Proxies, bool Translucent, TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer, FRDGTexture* RenderTexture)
+	auto DrawVdbProxies = [&](const TArray<FVdbMaterialSceneProxy*>& Proxies, bool Translucent, TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer, FRDGTexture* RenderTexture, FRDGTexture* DepthRenderTexture)
 	{
 		FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
+
+		bool bWriteDepth = DepthRenderTexture != nullptr;
 
 		auto* PassParameters = GraphBuilder.AllocParameters<FVdbShaderParametersPS>();
 		PassParameters->View = View->ViewUniformBuffer;
@@ -413,6 +428,11 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 		{
 			PassParameters->RenderTargets[0] = FRenderTargetBinding(RenderTexture, ERenderTargetLoadAction::EClear);
 			// Don't bind depth buffer, we will read it in Pixel Shader instead
+			if (bWriteDepth)
+			{
+				PassParameters->RenderTargets.DepthStencil =
+					FDepthStencilBinding(DepthRenderTexture, ERenderTargetLoadAction::EClear, FExclusiveDepthStencil::DepthWrite_StencilNop);
+			}
 		}
 		else
 		{
@@ -448,8 +468,11 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			Translucent ? RDG_EVENT_NAME("Vdb Translucent Rendering") : RDG_EVENT_NAME("Vdb Opaque Rendering"),
 			PassParameters,
 			ERDGPassFlags::Raster,
-			[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxies](FRHICommandListImmediate& RHICmdList)
+			[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxies, bWriteDepth](FRHICommandListImmediate& RHICmdList)
 		{
+			SCOPED_DRAW_EVENT(RHICmdList, StatVdbMaterial);
+			SCOPED_GPU_STAT(RHICmdList, StatVdbMaterial);
+
 			RHICmdList.SetViewport(ViewportRect.Min.X, ViewportRect.Min.Y, 0.0f, ViewportRect.Max.X, ViewportRect.Max.Y, 1.0f);
 			RHICmdList.SetScissorRect(false, 0, 0, 0, 0);
 
@@ -485,6 +508,7 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 								Proxy->IsLevelSet(), Proxy->IsTranslucentLevelSet(),
 								Proxy->UseImprovedSkylight(),
 								Proxy->UseTrilinearSampling() || FVdbCVars::CVarVolumetricVdbTrilinear.GetValueOnRenderThread(),
+								bWriteDepth,
 								ShaderElementData.TemperatureBufferSRV != nullptr,
 								ShaderElementData.ColorBufferSRV != nullptr,
 								MoveTemp(ShaderElementData));
@@ -525,7 +549,7 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 	if (!OpaqueProxies.IsEmpty())
 	{
 		SCOPE_CYCLE_COUNTER(STAT_VdbOpaque_RT);
-		DrawVdbProxies(OpaqueProxies, false, VdbUniformBuffer, nullptr);
+		DrawVdbProxies(OpaqueProxies, false, VdbUniformBuffer, nullptr, nullptr);
 	}
 
 	if (!TranslucentProxies.IsEmpty())
@@ -545,7 +569,20 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			VdbCurrRenderTexture = GraphBuilder.CreateTexture(TexDesc, TEXT("VdbRenderTexture"));
 		}
 
-		DrawVdbProxies(TranslucentProxies, true, VdbUniformBuffer, VdbCurrRenderTexture);
+		bool bWriteDepth = FVdbCVars::CVarVolumetricVdbWriteDepth.GetValueOnRenderThread();
+		FRDGTextureRef DepthTestTexture = nullptr;
+		if (bWriteDepth)
+		{
+			DepthTestTexture = GraphBuilder.CreateTexture(
+				FRDGTextureDesc::Create2D(Parameters.DepthTexture->Desc.Extent,
+					PF_DepthStencil,
+					FClearValueBinding::DepthFar,
+					TexCreate_DepthStencilTargetable | TexCreate_ShaderResource,
+					1),
+				TEXT("VdbMaterialDepth"));
+		}
+
+		DrawVdbProxies(TranslucentProxies, true, VdbUniformBuffer, VdbCurrRenderTexture, DepthTestTexture);
 
 		// Add optional post-processing (blurring, denoising etc.)
 		EVdbDenoiserMethod Method = FVdbCVars::CVarVolumetricVdbDenoiser.GetValueOnAnyThread() >= 0 ?
@@ -554,7 +591,13 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			GraphBuilder, VdbCurrRenderTexture, View, Parameters.ViewportRect, Method);
 
 		// Composite VDB offscreen rendering onto back buffer
-		VdbComposite::CompositeFullscreen(GraphBuilder, DenoisedTex, Parameters.ColorTexture, View);
+		VdbComposite::CompositeFullscreen(
+			GraphBuilder,
+			DenoisedTex,
+			Parameters.ColorTexture,
+			bWriteDepth ? DepthTestTexture : nullptr,
+			bWriteDepth ? Parameters.DepthTexture : nullptr,
+			View);
 	}
 }
 
