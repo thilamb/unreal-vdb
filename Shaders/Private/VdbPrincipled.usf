@@ -143,7 +143,7 @@ float4 RaymarchVolume(
 	const uint NumSteps = min(ceil(RaymarchDistance / StepSize), VdbPrincipledParams.MaxRayDepth);
 	float StepWorldMeters = VdbPrincipledParams.StepSize * CENTIMETER_TO_METER;
 
-	for (uint iStep = 0; iStep < NumSteps; ++iStep)
+	LOOP for (uint iStep = 0; iStep < NumSteps; ++iStep)
 	{
 		float s = StartDistance + (iStep + RandomSequence_GenerateSample1D(RandSequence)) * StepSize;
 		if (s >= Ray.TMax)
@@ -291,7 +291,7 @@ float4 VdbFogVolume(uint2 LaunchIndex)
 
 	uint LinearIndex = LaunchIndex.y * uint(View.BufferSizeAndInvSize.x) + LaunchIndex.x;
 
-	for (uint SampleIndex = 0; SampleIndex < VdbPrincipledParams.SamplesPerPixel; ++SampleIndex)
+	LOOP for (uint SampleIndex = 0; SampleIndex < VdbPrincipledParams.SamplesPerPixel; ++SampleIndex)
 	{
 		RandomSequence RandSequence;
 
