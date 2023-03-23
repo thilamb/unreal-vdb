@@ -307,7 +307,6 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 
 	VdbSampler VdbSampler = InitVdbSampler(DensityVdbBuffer);
 
-	float Exposure = ResolvedView.RealTimeReflectionCapture ? ResolvedView.RealTimeReflectionCapturePreExposure : ResolvedView.PreExposure;
 
 #if IS_TRANSLUCENT
 
@@ -359,12 +358,13 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 	}
 	Radiance /= SAMPLES_PER_PIXEL_FLOAT;
 
+	float Exposure = ResolvedView.RealTimeReflectionCapture ? ResolvedView.RealTimeReflectionCapturePreExposure : ResolvedView.PreExposure;
 	OutColor0 = float4(Radiance.rgb * Exposure, Radiance.a);
 
 #else
 
 	float4 Shading = TraceOpaqueLevelSet(VdbSampler, LocalToWorld, WorldToLocal, SvPosition, FactoryInterpolants);
-	OutColor0 = float4(Shading.rgb * Exposure, 1.0);
+	OutColor0 = float4(Shading.rgb, 1.0);
 	OutDepth = Shading.a;
 
 #endif
