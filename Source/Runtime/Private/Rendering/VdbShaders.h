@@ -75,14 +75,27 @@ public:
 
 
 BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbShaderParams, )
+	// Scene data
 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthTexture)
 	SHADER_PARAMETER_SAMPLER(SamplerState, LinearTexSampler)
+	// Vdb data
 	SHADER_PARAMETER(float, Threshold)
-
+	// Light data
+	//SHADER_PARAMETER_STRUCT_REF(FDeferredLightUniformStruct, DeferredLight)
+	SHADER_PARAMETER(int, bApplyEmissionAndTransmittance)
+	SHADER_PARAMETER(int, bApplyDirectLighting)
+	SHADER_PARAMETER(int, bApplyShadowTransmittance)
+	SHADER_PARAMETER(int, LightType)
+	SHADER_PARAMETER(float, VolumetricScatteringIntensity)
+	// Shadow data
 	SHADER_PARAMETER(float, ShadowStepSize)
-	SHADER_PARAMETER(int32, VirtualShadowMapId)
+	//SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FForwardLightData, ForwardLightData)
 	SHADER_PARAMETER_STRUCT(FForwardLightData, ForwardLightData)
-	SHADER_PARAMETER_STRUCT_INCLUDE(FVolumeShadowingShaderParametersGlobal0, Light0Shadow)
+	//SHADER_PARAMETER_STRUCT_INCLUDE(FVolumeShadowingShaderParameters, VolumeShadowingShaderParameters)
+	//SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
+	SHADER_PARAMETER(int32, VirtualShadowMapId)
+	// Indirect Lighting
+	//SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FLumenTranslucencyLightingUniforms, LumenGIVolumeStruct)
 END_GLOBAL_SHADER_PARAMETER_STRUCT()
 
 BEGIN_SHADER_PARAMETER_STRUCT(FVdbShaderParametersPS, )
@@ -91,6 +104,8 @@ BEGIN_SHADER_PARAMETER_STRUCT(FVdbShaderParametersPS, )
 	SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
 	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FVdbShaderParams, VdbUniformBuffer)
 	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FInstanceCullingGlobalUniforms, InstanceCulling)
+	SHADER_PARAMETER_STRUCT_REF(FDeferredLightUniformStruct, DeferredLight)
+	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FLumenTranslucencyLightingUniforms, LumenGIVolumeStruct)
 	RENDER_TARGET_BINDING_SLOTS()
 END_SHADER_PARAMETER_STRUCT()
 
@@ -146,9 +161,25 @@ public:
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MAJOR"), NANOVDB_MAJOR_VERSION_NUMBER);
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MINOR"), NANOVDB_MINOR_VERSION_NUMBER);
 
-		//const bool bSupportVirtualShadowMap = IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-		FVirtualShadowMapArray::SetShaderDefines(OutEnvironment);
+		bool bSupportVirtualShadowMap = IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+		if (bSupportVirtualShadowMap)
+		{
+			OutEnvironment.SetDefine(TEXT("VIRTUAL_SHADOW_MAP"), 1);
+			FVirtualShadowMapArray::SetShaderDefines(OutEnvironment);
+		}
+
+		// This shader takes a very long time to compile with FXC, so we pre-compile it with DXC first and then forward the optimized HLSL to FXC.
+		OutEnvironment.CompilerFlags.Add(CFLAG_PrecompileWithDXC);
+		OutEnvironment.CompilerFlags.Add(CFLAG_AllowTypedUAVLoads);
+
+
 		//FForwardLightingParameters::ModifyCompilationEnvironment(Parameters.Platform, OutEnvironment);
+
+		//if (PermutationVector.Get<FSampleOpaqueShadow>() && VirtualShadowMapSamplingSupported(Parameters.Platform))
+		//{
+		//	OutEnvironment.SetDefine(TEXT("VIRTUAL_SHADOW_MAP"), 1);
+		//	FVirtualShadowMapArray::SetShaderDefines(OutEnvironment);
+		//}
 	}
 
 	void GetShaderBindings(
@@ -174,6 +205,7 @@ public:
 		ShaderBindings.Add(CustomFloatData2, ShaderElementData.CustomFloatData2);
 	}
 };
+
 // TODO: this is getting ridiculous. Find other solution
 typedef FVdbShaderPS<true, false, false, false, false> FVdbShaderPS_LevelSet;
 typedef FVdbShaderPS<true, true, false, false, false> FVdbShaderPS_LevelSet_Translucent; // reusing USE_TEMPERATURE_VDB variation for translucency to avoid another variation
@@ -194,6 +226,256 @@ typedef FVdbShaderPS<false, true, true, false, false>  FVdbShaderPS_FogVolume_Bl
 typedef FVdbShaderPS<false, true, true, false, true>  FVdbShaderPS_FogVolume_Blackbody_Color_Trilinear;
 typedef FVdbShaderPS<false, true, true, true, false>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight;
 typedef FVdbShaderPS<false, true, true, true, true>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear;
+
+//-----------------------------------------------------------------------------
+
+BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbDepthShaderParams, )
+	SHADER_PARAMETER(FMatrix44f, ShadowClipToTranslatedWorld)
+	SHADER_PARAMETER(FVector3f, ShadowPreViewTranslation)
+	END_GLOBAL_SHADER_PARAMETER_STRUCT()
+
+BEGIN_SHADER_PARAMETER_STRUCT(FVdbShadowDepthPassParameters, )
+	SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+	//SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FMobileShadowDepthPassUniformParameters, MobilePassUniformBuffer)
+	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FShadowDepthPassUniformParameters, DeferredPassUniformBuffer)
+	SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
+	//SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
+	//SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FInstanceCullingGlobalUniforms, InstanceCulling)
+	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FVdbDepthShaderParams, VdbUniformBuffer)
+
+	RENDER_TARGET_BINDING_SLOTS()
+END_SHADER_PARAMETER_STRUCT()
+
+class FVdbShadowDepthShaderElementData : public FVdbElementData
+{
+public:
+	int32 LayerId;
+	int32 bUseGpuSceneInstancing;
+};
+
+/**
+* A vertex shader for rendering the depth of a mesh.
+*/
+class FVdbShadowDepthVS : public FMeshMaterialShader
+{
+public:
+	DECLARE_INLINE_TYPE_LAYOUT(FVdbShadowDepthVS, NonVirtual);
+
+	static bool ShouldCompilePermutation(const FMeshMaterialShaderPermutationParameters& Parameters)
+	{
+		return false;
+	}
+
+	void GetShaderBindings(
+		const FScene* Scene,
+		ERHIFeatureLevel::Type FeatureLevel,
+		const FPrimitiveSceneProxy* PrimitiveSceneProxy,
+		const FMaterialRenderProxy& MaterialRenderProxy,
+		const FMaterial& Material,
+		const FMeshPassProcessorRenderState& DrawRenderState,
+		const FVdbShadowDepthShaderElementData& ShaderElementData,
+		FMeshDrawSingleShaderBindings& ShaderBindings) const
+	{
+		FMeshMaterialShader::GetShaderBindings(Scene, FeatureLevel, PrimitiveSceneProxy, MaterialRenderProxy, Material, DrawRenderState, ShaderElementData, ShaderBindings);
+
+		ShaderBindings.Add(LayerId, ShaderElementData.LayerId);
+		ShaderBindings.Add(bUseGpuSceneInstancing, ShaderElementData.bUseGpuSceneInstancing);
+	}
+	
+	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FMaterialShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MAJOR"), NANOVDB_MAJOR_VERSION_NUMBER);
+		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MINOR"), NANOVDB_MINOR_VERSION_NUMBER);
+		OutEnvironment.SetDefine(TEXT("MATERIALBLENDING_MASKED"), TEXT("1"));
+	}
+
+	FVdbShadowDepthVS() = default;
+	FVdbShadowDepthVS(const ShaderMetaType::CompiledShaderInitializerType& Initializer) :
+		FMeshMaterialShader(Initializer)
+	{
+		LayerId.Bind(Initializer.ParameterMap, TEXT("LayerId"));
+		bUseGpuSceneInstancing.Bind(Initializer.ParameterMap, TEXT("bUseGpuSceneInstancing"));
+	}
+
+private:
+	LAYOUT_FIELD(FShaderParameter, LayerId);
+	LAYOUT_FIELD(FShaderParameter, bUseGpuSceneInstancing);
+};
+
+enum EVdbShadowDepthVertexShaderMode
+{
+	VertexShadowDepth_PerspectiveCorrect,
+	VertexShadowDepth_OutputDepth,
+	VertexShadowDepth_OnePassPointLight,
+	VertexShadowDepth_VirtualShadowMap,
+};
+
+template <EVdbShadowDepthVertexShaderMode ShaderMode>
+class TVdbShadowDepthVS : public FVdbShadowDepthVS
+{
+	DECLARE_SHADER_TYPE(TVdbShadowDepthVS, MeshMaterial);
+
+	TVdbShadowDepthVS() = default;
+	TVdbShadowDepthVS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FVdbShadowDepthVS(Initializer)
+	{}
+
+public:
+
+	static bool ShouldCompilePermutation(const FMeshMaterialShaderPermutationParameters& Parameters)
+	{
+		// TODO: check and add info from TShadowDepthVS::ShouldCompilePermutation
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5) &&
+			Parameters.MaterialParameters.MaterialDomain == MD_Volume &&
+			FMeshMaterialShader::ShouldCompilePermutation(Parameters) &&
+			VdbShaders::IsSupportedVertexFactoryType(Parameters.VertexFactoryType);
+	}
+
+	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FVdbShadowDepthVS::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+
+		OutEnvironment.SetDefine(TEXT("PERSPECTIVE_CORRECT_DEPTH"), (uint32)(ShaderMode == VertexShadowDepth_PerspectiveCorrect));
+		OutEnvironment.SetDefine(TEXT("ONEPASS_POINTLIGHT_SHADOW"), (uint32)(ShaderMode == VertexShadowDepth_OnePassPointLight));
+		OutEnvironment.SetDefine(TEXT("POSITION_ONLY"), 0);// (uint32)bUsePositionOnlyStream);
+
+		bool bEnableNonNaniteVSM = (ShaderMode == VertexShadowDepth_VirtualShadowMap);
+		OutEnvironment.SetDefine(TEXT("ENABLE_NON_NANITE_VSM"), bEnableNonNaniteVSM ? 1 : 0);
+		if (bEnableNonNaniteVSM)
+		{
+			FVirtualShadowMapArray::SetShaderDefines(OutEnvironment);
+		}
+
+		if (ShaderMode == VertexShadowDepth_OnePassPointLight)
+		{
+			OutEnvironment.CompilerFlags.Add(CFLAG_VertexUseAutoCulling);
+		}
+	}
+};
+typedef TVdbShadowDepthVS<VertexShadowDepth_PerspectiveCorrect> FVdbShadowDepthVS_PerspectiveCorrect;
+typedef TVdbShadowDepthVS<VertexShadowDepth_OutputDepth> FVdbShadowDepthVS_OutputDepth;
+typedef TVdbShadowDepthVS<VertexShadowDepth_OnePassPointLight> FVdbShadowDepthVS_OnePassPointLight;
+typedef TVdbShadowDepthVS<VertexShadowDepth_VirtualShadowMap> FVdbShadowDepthVS_VirtualShadowMap;
+
+
+class FVdbShadowDepthPS : public FMeshMaterialShader
+{
+	DECLARE_INLINE_TYPE_LAYOUT(FVdbShadowDepthPS, NonVirtual);
+
+	LAYOUT_FIELD(FShaderResourceParameter, DensityVdbBuffer);
+	LAYOUT_FIELD(FShaderParameter, CustomIntData0);
+	LAYOUT_FIELD(FShaderParameter, CustomIntData1);
+	LAYOUT_FIELD(FShaderParameter, CustomFloatData0);
+	LAYOUT_FIELD(FShaderParameter, CustomFloatData1);
+	LAYOUT_FIELD(FShaderParameter, CustomFloatData2);
+
+	FVdbShadowDepthPS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FMeshMaterialShader(Initializer)
+	{
+		DensityVdbBuffer.Bind(Initializer.ParameterMap, TEXT("DensityVdbBuffer"));
+		CustomIntData0.Bind(Initializer.ParameterMap, TEXT("CustomIntData0"));
+		CustomIntData1.Bind(Initializer.ParameterMap, TEXT("CustomIntData1"));
+		CustomFloatData0.Bind(Initializer.ParameterMap, TEXT("CustomFloatData0"));
+		CustomFloatData1.Bind(Initializer.ParameterMap, TEXT("CustomFloatData1"));
+		CustomFloatData2.Bind(Initializer.ParameterMap, TEXT("CustomFloatData2"));
+
+		PassUniformBuffer.Bind(Initializer.ParameterMap, FVdbShaderParams::StaticStructMetadata.GetShaderVariableName());
+	}
+
+	FVdbShadowDepthPS() {}
+
+public:
+
+	static bool ShouldCompilePermutation(const FMeshMaterialShaderPermutationParameters& Parameters)
+	{
+		return FVdbShaderVS::ShouldCompilePermutation(Parameters);
+	}
+
+	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FMaterialShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("USE_FORCE_TEXTURE_MIP"), TEXT("1"));
+		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MAJOR"), NANOVDB_MAJOR_VERSION_NUMBER);
+		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MINOR"), NANOVDB_MINOR_VERSION_NUMBER);
+
+		OutEnvironment.SetDefine(TEXT("MATERIALBLENDING_MASKED"), TEXT("1"));
+	}
+
+	void GetShaderBindings(
+		const FScene* Scene,
+		ERHIFeatureLevel::Type FeatureLevel,
+		const FPrimitiveSceneProxy* PrimitiveSceneProxy,
+		const FMaterialRenderProxy& MaterialRenderProxy,
+		const FMaterial& Material,
+		const FMeshPassProcessorRenderState& DrawRenderState,
+		const FVdbElementData& ShaderElementData,
+		FMeshDrawSingleShaderBindings& ShaderBindings) const
+	{
+		FMeshMaterialShader::GetShaderBindings(Scene, FeatureLevel, PrimitiveSceneProxy, MaterialRenderProxy, Material, DrawRenderState, ShaderElementData, ShaderBindings);
+
+		ShaderBindings.Add(DensityVdbBuffer, ShaderElementData.DensityBufferSRV);
+		ShaderBindings.Add(CustomIntData0, ShaderElementData.CustomIntData0);
+		ShaderBindings.Add(CustomIntData1, ShaderElementData.CustomIntData1);
+		ShaderBindings.Add(CustomFloatData0, ShaderElementData.CustomFloatData0);
+		ShaderBindings.Add(CustomFloatData1, ShaderElementData.CustomFloatData1);
+		ShaderBindings.Add(CustomFloatData2, ShaderElementData.CustomFloatData2);
+	}
+};
+
+enum EVdbShadowDepthPixelShaderMode
+{
+	PixelShadowDepth_NonPerspectiveCorrect,
+	PixelShadowDepth_PerspectiveCorrect,
+	PixelShadowDepth_OnePassPointLight,
+	PixelShadowDepth_VirtualShadowMap
+};
+
+template <EVdbShadowDepthPixelShaderMode ShaderMode, bool LevelSet>
+class TVdbShadowDepthPS : public FVdbShadowDepthPS
+{
+	DECLARE_SHADER_TYPE(TVdbShadowDepthPS, MeshMaterial);
+
+	TVdbShadowDepthPS() = default;
+	TVdbShadowDepthPS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FVdbShadowDepthPS(Initializer)
+	{}
+
+public:
+
+	static bool ShouldCompilePermutation(const FMeshMaterialShaderPermutationParameters& Parameters)
+	{
+		// TODO: check and add relevant things from TShadowDepthPS::ShouldCompilePermutation
+		return FVdbShadowDepthPS::ShouldCompilePermutation(Parameters);
+	}
+
+	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FVdbShadowDepthPS::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+
+		OutEnvironment.SetDefine(TEXT("PERSPECTIVE_CORRECT_DEPTH"), (uint32)(ShaderMode == PixelShadowDepth_PerspectiveCorrect));
+		OutEnvironment.SetDefine(TEXT("ONEPASS_POINTLIGHT_SHADOW"), (uint32)(ShaderMode == PixelShadowDepth_OnePassPointLight));
+		OutEnvironment.SetDefine(TEXT("VIRTUAL_TEXTURE_TARGET"), (uint32)(ShaderMode == PixelShadowDepth_VirtualShadowMap));
+
+		bool bEnableNonNaniteVSM = (ShaderMode == PixelShadowDepth_VirtualShadowMap);
+		OutEnvironment.SetDefine(TEXT("ENABLE_NON_NANITE_VSM"), bEnableNonNaniteVSM ? 1 : 0);
+		if (bEnableNonNaniteVSM != 0)
+		{
+			FVirtualShadowMapArray::SetShaderDefines(OutEnvironment);
+		}
+
+		OutEnvironment.SetDefine(TEXT("LEVEL_SET"), LevelSet);
+	}
+};
+typedef TVdbShadowDepthPS<PixelShadowDepth_NonPerspectiveCorrect, true> FVdbShadowDepthPS_NonPerspectiveCorrecth_LevelSet;
+typedef TVdbShadowDepthPS<PixelShadowDepth_PerspectiveCorrect, true> FVdbShadowDepthPS_PerspectiveCorrect_LevelSet;
+typedef TVdbShadowDepthPS<PixelShadowDepth_OnePassPointLight, true> FVdbShadowDepthPS_OnePassPointLight_LevelSet;
+typedef TVdbShadowDepthPS<PixelShadowDepth_VirtualShadowMap, true> FVdbShadowDepthPS_VirtualShadowMap_LevelSet;
+typedef TVdbShadowDepthPS<PixelShadowDepth_NonPerspectiveCorrect, false> FVdbShadowDepthPS_NonPerspectiveCorrecth_FogVolume;
+typedef TVdbShadowDepthPS<PixelShadowDepth_PerspectiveCorrect, false> FVdbShadowDepthPS_PerspectiveCorrect_FogVolume;
+typedef TVdbShadowDepthPS<PixelShadowDepth_OnePassPointLight, false> FVdbShadowDepthPS_OnePassPointLight_FogVolume;
+typedef TVdbShadowDepthPS<PixelShadowDepth_VirtualShadowMap, false> FVdbShadowDepthPS_VirtualShadowMap_FogVolume;
+
 
 //-----------------------------------------------------------------------------
 

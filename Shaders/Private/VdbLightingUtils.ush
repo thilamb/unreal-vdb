@@ -1,0 +1,263 @@
+// Copyright Thibault Lambert
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http ://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#define SUPPORT_CONTACT_SHADOWS 0
+
+#define DYNAMICALLY_SHADOWED 1
+#define TREAT_MAXDEPTH_UNSHADOWED 1
+
+#define SHADOW_QUALITY 2
+#define NO_TRANSLUCENCY_AVAILABLE
+
+#define VOLUME_SHADOW_SAMPLING_INPUT 0
+
+#define VIRTUAL_SHADOW_MAP 1
+
+// Forward Lighting Data
+#define ForwardLightData VdbParams.ForwardLightData
+#include "/Engine/Private/LightGridCommon.ush"
+#include "/Engine/Private/DeferredLightingCommon.ush"
+//#include "/Engine/Private/LightData.ush"
+
+// Shadow maps
+#include "/Engine/Private/ShadowProjectionCommon.ush"
+#include "/Engine/Private/ShadowFilteringCommon.ush"
+
+//#define Light0Shadow VdbParams
+//#include "/Engine/Private/VolumeLightingCommonSampling.ush"
+//#include "/Engine/Private/ForwardShadowingCommon.ush"
+
+//#include "/Engine/Private/ForwardShadowingCommon.ush"
+//#include "/Engine/Private/VolumeLightingCommon.ush"
+//
+//#include "/Engine/Private/SHCommon.ush"
+//#define FrontLayerTranslucencyReflectionsStruct LumenGIVolumeStruct
+//#define RadianceCacheInterpolation LumenGIVolumeStruct
+//#include "/Engine/Private/Lumen/LumenTranslucencyVolumeShared.ush"
+
+#if VIRTUAL_SHADOW_MAP
+	#include "/Engine/Private/VirtualShadowMaps/VirtualShadowMapProjectionCommon.ush"
+#endif
+
+FDeferredLightData LoadLightData(uint LightType, float VolumetricScatteringIntensity)
+{
+	FDeferredLightData LightData = (FDeferredLightData)0;
+	LightData.TranslatedWorldPosition = GetDeferredLightTranslatedWorldPosition();
+	LightData.InvRadius = DeferredLightUniforms.InvRadius;
+	LightData.Color = DeferredLightUniforms.Color * VolumetricScatteringIntensity;
+	LightData.FalloffExponent = DeferredLightUniforms.FalloffExponent;
+	LightData.Direction = DeferredLightUniforms.Direction;
+	LightData.Tangent = DeferredLightUniforms.Tangent;
+	LightData.SpotAngles = DeferredLightUniforms.SpotAngles;
+	LightData.SourceRadius = DeferredLightUniforms.SourceRadius;
+	LightData.SourceLength = DeferredLightUniforms.SourceLength;
+	LightData.SoftSourceRadius = DeferredLightUniforms.SoftSourceRadius;
+	LightData.SpecularScale = DeferredLightUniforms.SpecularScale;
+	LightData.ContactShadowLength = abs(DeferredLightUniforms.ContactShadowLength);
+	LightData.ContactShadowLengthInWS = DeferredLightUniforms.ContactShadowLength < 0.0f;
+	LightData.ContactShadowNonShadowCastingIntensity = DeferredLightUniforms.ContactShadowNonShadowCastingIntensity;
+	LightData.DistanceFadeMAD = DeferredLightUniforms.DistanceFadeMAD;
+	LightData.ShadowMapChannelMask = DeferredLightUniforms.ShadowMapChannelMask;
+	LightData.ShadowedBits = DeferredLightUniforms.ShadowedBits;
+	LightData.bInverseSquared = LightType != LIGHT_TYPE_DIRECTIONAL && DeferredLightUniforms.FalloffExponent == 0; // Directional lights don't use 'inverse squared attenuation'
+
+	LightData.RectLightBarnCosAngle = DeferredLightUniforms.RectLightBarnCosAngle;
+	LightData.RectLightBarnLength = DeferredLightUniforms.RectLightBarnLength;
+	LightData.RectLightAtlasMaxLevel = DeferredLightUniforms.RectLightAtlasMaxLevel;
+	LightData.RectLightAtlasUVOffset = DeferredLightUniforms.RectLightAtlasUVOffset;
+	LightData.RectLightAtlasUVScale = DeferredLightUniforms.RectLightAtlasUVScale;
+
+	// Lumen interpretation
+	LightData.bRadialLight = LightType != LIGHT_TYPE_DIRECTIONAL;
+	LightData.bSpotLight = LightType == LIGHT_TYPE_SPOT;
+	LightData.bRectLight = LightType == LIGHT_TYPE_RECT;
+
+	LightData.HairTransmittance = InitHairTransmittanceData();
+	return LightData;
+}
+
+//float ComputeShadows(float3 TranslatedWorldPos, float SceneDepth)
+//{
+//#if 1 // VOLUME SHADOWING
+//		bool bUnused;
+//		float OpaqueShadow = ComputeLight0VolumeShadowing(TranslatedWorldPos, false, false, bUnused);
+//#else // FORWARD SHADOWING
+//		float OpaqueShadow = ComputeDirectionalLightStaticShadowing(TranslatedWorldPos);
+//		bool bUnused = false;
+//		OpaqueShadow *= ComputeDirectionalLightDynamicShadowing(TranslatedWorldPos, DeviceZ, bUnused);
+//#endif // SHADOW_MAP
+//#if VIRTUAL_SHADOW_MAP
+//		if (VdbParams.VirtualShadowMapId != INDEX_NONE)
+//		{
+//			FVirtualShadowMapSampleResult VirtualShadowMapSample = SampleVirtualShadowMapTranslatedWorld(ForwardLightData.DirectionalLightVSM, TranslatedWorldPos);
+//			OpaqueShadow *= VirtualShadowMapSample.ShadowFactor;
+//		}
+//#endif // VIRTUALSHADOW_MAP
+//	return OpaqueShadow;
+//
+//}
+
+//
+//float ComputeOpaqueShadows(
+//	float3 TranslatedWorldPosition,
+//	inout FDeferredLightData LightData,
+//	uint LightType
+//)
+//{
+//	float HardSurfaceShadowFactor = 1.0;
+//
+//#if HARD_SURFACE_SHADOWING
+//	// Evaluate hard-surface shadow term
+//	if (LightType == LIGHT_TYPE_DIRECTIONAL)
+//	{
+//		float SceneDepth = dot(TranslatedWorldPosition - PrimaryView.TranslatedWorldCameraOrigin, View.ViewForward);
+//		bool bShadowingFromValidUVArea = false;
+//		float ShadowFactor = ComputeDirectionalLightDynamicShadowing(TranslatedWorldPosition, SceneDepth, bShadowingFromValidUVArea);
+//
+//		if (bShadowingFromValidUVArea)
+//		{
+//			HardSurfaceShadowFactor *= ShadowFactor;
+//		}
+//	}
+//	else // Local lights
+//	{
+//		bool bShadowingFromValidUVArea = false;
+//		float ShadowFactor = ComputeVolumeShadowing(TranslatedWorldPosition, LightData.bRadialLight && !LightData.bSpotLight, LightData.bSpotLight, bShadowingFromValidUVArea);
+//
+//		if (bShadowingFromValidUVArea)
+//		{
+//			HardSurfaceShadowFactor *= ShadowFactor;
+//		}
+//	}
+//
+//#if VIRTUAL_SHADOW_MAP
+//	if (VirtualShadowMapId != INDEX_NONE)
+//	{
+//		FVirtualShadowMapSampleResult VirtualShadowMapSample = SampleVirtualShadowMapTranslatedWorld(VirtualShadowMapId, TranslatedWorldPosition);
+//		HardSurfaceShadowFactor *= VirtualShadowMapSample.ShadowFactor;
+//	}
+//#endif // VIRTUALSHADOW_MAP
+//
+//#endif // HARD_SURFACE_SHADOWING
+//
+//	return HardSurfaceShadowFactor;
+//}
+
+//
+//
+//float3 ComputeTransmittance(
+//	float3 WorldRayOrigin,
+//	float3 ToLight,
+//	uint MaxStepCount
+//)
+//{
+//#if DIM_USE_TRANSMITTANCE_VOLUME
+//	float3 LocalRayOrigin = mul(float4(WorldRayOrigin, 1.0), GetWorldToLocal()).xyz;
+//	float3 LocalBoundsMin = GetLocalBoundsOrigin() - GetLocalBoundsExtent();
+//	float3 TransmittanceUVW = saturate((LocalRayOrigin - LocalBoundsMin) / (2.0 * GetLocalBoundsExtent()));
+//	float MipLevel = 0;
+//
+//	float3 Transmittance = SampleLightingCache(TransmittanceUVW, MipLevel);
+//
+//#else // DIM_USE_TRANSMITTANCE_VOLUME
+//
+//	float3 WorldRayEnd = WorldRayOrigin + ToLight;
+//	float3 WorldRayDirection = normalize(ToLight);
+//
+//	float3 LocalRayOrigin = mul(float4(WorldRayOrigin, 1.0), GetWorldToLocal()).xyz;
+//	float3 LocalRayEnd = mul(float4(WorldRayEnd, 1.0), GetWorldToLocal()).xyz;
+//	float3 LocalRayDirection = LocalRayEnd - LocalRayOrigin;
+//	float LocalRayTMin = 0.0;
+//	float LocalRayTMax = length(LocalRayDirection);
+//	LocalRayDirection /= LocalRayTMax;
+//
+//	float ShadowBias = 0.5;
+//	float ShadowStepSize = GetShadowStepSize();
+//	int bApplyEmissionAndTransmittance = 0;
+//	int bApplyDirectLighting = 0;
+//	int bApplyShadowTransmittance = 0;
+//
+//	FRayMarchingContext ShadowRayMarchingContext = CreateRayMarchingContext(
+//		LocalRayOrigin,
+//		LocalRayDirection,
+//		LocalRayTMin,
+//		LocalRayTMax,
+//		WorldRayOrigin,
+//		WorldRayDirection,
+//		ShadowBias,
+//		ShadowStepSize,
+//		MaxStepCount,
+//		bApplyEmissionAndTransmittance,
+//		bApplyDirectLighting,
+//		bApplyShadowTransmittance
+//		//RayMarchingContext.MaxShadowTraceDistance
+//	);
+//
+//	float3 Transmittance = ComputeTransmittance(ShadowRayMarchingContext);
+//#endif // DIM_USE_INSCATTERING_VOLUME
+//
+//	return Transmittance;
+//}
+//
+//float3 ComputeInscattering(
+//	float3 WorldPosition,
+//	inout FDeferredLightData LightData,
+//	uint LightType,
+//	uint MaxStepCount,
+//	bool bApplyShadowTransmittance
+//)
+//{
+//	float3 Inscattering = 0.0;
+//
+//#if DIM_USE_INSCATTERING_VOLUME
+//	float3 LocalShadowRayOrigin = mul(float4(WorldPosition, 1.0), GetWorldToLocal()).xyz;
+//	float3 LocalBoundsMin = GetLocalBoundsOrigin() - GetLocalBoundsExtent();
+//	float3 TransmittanceUVW = saturate((LocalShadowRayOrigin - LocalBoundsMin) / (2.0 * GetLocalBoundsExtent()));
+//	float MipLevel = 0;
+//
+//	Inscattering = SampleLightingCache(TransmittanceUVW, MipLevel);
+//
+//#else // DIM_USE_INSCATTERING_VOLUME
+//	float3 L = LightData.Direction;
+//	//float3 ToLight = L * RayMarchingContext.MaxShadowTraceDistance;
+//	float3 ToLight = L * 10000;
+//
+//	float LightAttenuation = 1.0;
+//	float3 TranslatedWorldPosition = LWCHackToFloat(LWCAdd(WorldPosition, PrimaryView.PreViewTranslation));
+//	if (LightType != LIGHT_TYPE_DIRECTIONAL)
+//	{
+//		LightAttenuation = GetLocalLightAttenuation(TranslatedWorldPosition, LightData, ToLight, L);
+//		if (LightData.bRectLight)
+//		{
+//			FRect Rect = GetRect(ToLight, LightData);
+//			LightAttenuation *= IntegrateLight(Rect);
+//		}
+//		else
+//		{
+//			FCapsuleLight Capsule = GetCapsule(ToLight, LightData);
+//			Capsule.DistBiasSqr = 0;
+//			LightAttenuation *= IntegrateLight(Capsule, LightData.bInverseSquared);
+//		}
+//	}
+//
+//	float HardSurfaceShadowFactor = ComputeHardSurfaceShadowFactor(TranslatedWorldPosition, LightData, LightType);
+//	Inscattering = LightData.Color * LightAttenuation * HardSurfaceShadowFactor;
+//	if (any(Inscattering > 0.0) && bApplyShadowTransmittance)
+//	{
+//		Inscattering *= ComputeTransmittance(WorldPosition, ToLight, MaxStepCount);
+//	}
+//#endif // DIM_USE_INSCATTERING_VOLUME
+//
+//	return Inscattering;
+//}

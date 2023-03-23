@@ -35,6 +35,7 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 	TranslucentLevelSet = LevelSet && InComponent->TranslucentLevelSet;
 	ImprovedSkylight = InComponent->ImprovedSkylight;
 	TrilinearSampling = InComponent->TrilinearSampling;
+	CastShadows = InComponent->CastShadows;
 
 	VdbMaterialRenderExtension = FVolumeRuntimeModule::GetRenderExtension(InComponent->RenderTarget);
 
@@ -70,6 +71,8 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 
 	FillValue(AssetComponent->TemperatureVolume, TemperatureRenderBuffer);
 	FillValue(AssetComponent->ColorVolume, ColorRenderBuffer);
+
+	bCastDynamicShadow = true;
 }
 
 // This setups associated volume mesh for built-in Unreal passes. 
@@ -98,7 +101,7 @@ void FVdbMaterialSceneProxy::GetDynamicMeshElements(const TArray<const FSceneVie
 			FMeshBatch& Mesh = Collector.AllocateMesh();
 			Mesh.bWireframe = AllowDebugViewmodes() && ViewFamily.EngineShowFlags.Wireframe;
 
-			VdbMaterialRenderExtension->CreateMeshBatch(Mesh, this, UserData, Material->GetRenderProxy());
+			VdbMaterialRenderExtension->CreateMeshBatch(View, Mesh, this, UserData, Material->GetRenderProxy());
 
 			Collector.AddMesh(ViewIndex, Mesh);
 
@@ -114,7 +117,7 @@ FPrimitiveViewRelevance FVdbMaterialSceneProxy::GetViewRelevance(const FSceneVie
 {
 	FPrimitiveViewRelevance Result;
 	Result.bDrawRelevance = IsShown(View);
-	Result.bShadowRelevance = IsShadowCast(View) && ShouldRenderInMainPass();
+	Result.bShadowRelevance = CastShadows;//&& IsShadowCast(View) && ShouldRenderInMainPass();
 	Result.bDynamicRelevance = true;
 	Result.bStaticRelevance = false;
 	Result.bRenderInMainPass = ShouldRenderInMainPass();

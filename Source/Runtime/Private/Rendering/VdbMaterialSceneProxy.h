@@ -49,18 +49,21 @@ public:
 	bool IsIndexToLocalDeterminantNegative() const { return IndexToLocalDeterminantNegative; }
 	bool UseImprovedSkylight() const { return ImprovedSkylight; }
 	bool UseTrilinearSampling() const { return TrilinearSampling; }
+	bool CastingShadows() const { return CastShadows; }
 	void ResetVisibility() { VisibleViews.Empty(4); }
 	bool IsVisible(const FSceneView* View) const { return VisibleViews.Find(View) != INDEX_NONE; }
 	void Update(const FMatrix44f& IndexToLocal, const FVector3f& IndexMin, const FVector3f& IndexSize, FVdbRenderBuffer* DensityRenderBuffer, FVdbRenderBuffer* TemperatureRenderBuffer, FVdbRenderBuffer* ColorRenderBuffer);
 	void UpdateCurveAtlasTex();
 
-protected:
+
 	//~ Begin FPrimitiveSceneProxy Interface
+	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
+
+protected:
 	virtual SIZE_T GetTypeHash() const override;
 	virtual void CreateRenderThreadResources() override;
 	virtual void DestroyRenderThreadResources() override;
 	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
-	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
 	virtual uint32 GetMemoryFootprint() const override { return(sizeof(*this) + GetAllocatedSize()); }
 	//~ End FPrimitiveSceneProxy Interface
 
@@ -76,6 +79,7 @@ private:
 	bool ImprovedSkylight;
 	bool TrilinearSampling;
 	bool IndexToLocalDeterminantNegative;
+	bool CastShadows;
 
 	FIntVector4 CustomIntData0;
 	FIntVector4 CustomIntData1;

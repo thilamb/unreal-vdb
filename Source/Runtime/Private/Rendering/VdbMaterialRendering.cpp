@@ -1,4 +1,4 @@
-// Copyright 2022 Eidos-Montreal / Eidos-Sherbrooke
+// Copyright Thibault Lambert
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,221 +20,59 @@
 #include "VdbComposite.h"
 #include "VolumeMesh.h"
 #include "SceneTexturesConfig.h"
+#include "SystemTextures.h"
 
 #include "LocalVertexFactory.h"
-#include "MeshPassProcessor.h"
-#include "MeshPassProcessor.inl"
+//#include "MeshPassProcessor.h"
+//#include "MeshPassProcessor.inl"
+#include "VdbMeshPassProcessor.inl"
+
 #include "Modules\ModuleManager.h"
 #include "SceneView.h"
 #include "ScenePrivate.h"
+#include "RenderUtils.h"
 
 #include "VolumeLighting.h"
 #include "VolumetricFog.h"
 
 DEFINE_LOG_CATEGORY(LogSparseVolumetrics);
 DECLARE_GPU_STAT_NAMED(StatVdbMaterial, TEXT("Vdb Material Rendering"));
+DECLARE_GPU_STAT_NAMED(StatVdbShadowDepthMaterial, TEXT("Vdb Shadow Depth Material Rendering"));
 
-//-----------------------------------------------------------------------------
-//--- FVdbMeshProcessor
-//-----------------------------------------------------------------------------
 
-class FVdbMeshProcessor : public FMeshPassProcessor
+FShadowDepthType CSMVdbShadowDepthType(true, false);
+
+void SetupDummyForwardLightUniformParameters(FRDGBuilder& GraphBuilder, FForwardLightData& ForwardLightData)
 {
-public:
-	FVdbMeshProcessor(
-		const FScene* Scene,
-		const FSceneView* InView,
-		FMeshPassDrawListContext* InDrawListContext,
-		bool IsLevelSet, bool IsTranslucentLevelSet,
-		bool ImprovedSkylight,
-		bool TrilinearSampling,
-		bool WriteDepth,
-		bool UseTempVdb, bool UseColorVdb,
-		FVdbElementData&& ShaderElementData)
-		: FMeshPassProcessor(Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
-		, VdbShaderElementData(ShaderElementData)
-		, bLevelSet(IsLevelSet)
-		, bTranslucentLevelSet(IsTranslucentLevelSet)
-		, bImprovedSkylight(ImprovedSkylight)
-		, bTrilinearSampling(TrilinearSampling)
-		, bTemperatureVdb(UseTempVdb)
-		, bColorVdb(UseColorVdb)
+	const FRDGSystemTextures& SystemTextures = FRDGSystemTextures::Get(GraphBuilder);
+
+	ForwardLightData.DirectionalLightShadowmapAtlas = SystemTextures.Black;
+	ForwardLightData.DirectionalLightStaticShadowmap = GBlackTexture->TextureRHI;
+
+	FRDGBufferRef ForwardLocalLightBuffer = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(FVector4f));
+	ForwardLightData.ForwardLocalLightBuffer = GraphBuilder.CreateSRV(ForwardLocalLightBuffer, PF_A32B32G32R32F);
+
+	FRDGBufferRef NumCulledLightsGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint32));
+	ForwardLightData.NumCulledLightsGrid = GraphBuilder.CreateSRV(NumCulledLightsGrid, PF_R32_UINT);
+
+	if (RHISupportsBufferLoadTypeConversion(GMaxRHIShaderPlatform))
 	{
-		if (bLevelSet && !bTranslucentLevelSet)
-		{
-			PassDrawRenderState.SetBlendState(TStaticBlendState<>::GetRHI());
-			PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<true, CF_DepthNearOrEqual>::GetRHI());
-		}
-		else
-		{
-			PassDrawRenderState.SetBlendState(TStaticBlendState<CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_One, BF_InverseSourceAlpha>::GetRHI()); // premultiplied alpha blending
-			if (WriteDepth) 
-			{
-				PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<true, CF_DepthNearOrEqual>::GetRHI());
-			}
-			else
-			{
-				PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<false, CF_DepthNearOrEqual>::GetRHI());
-			}
-
-		}
-
-		int32 CinematicMode = FVdbCVars::CVarVolumetricVdbCinematicQuality.GetValueOnAnyThread();
-		if (CinematicMode == 1)
-		{
-			VdbShaderElementData.CustomFloatData0[0] /= 4.f; // local step size
-			VdbShaderElementData.CustomFloatData0[1] = FMath::Max(1.f, VdbShaderElementData.CustomFloatData0[1] / 4.f); // local shadow step size
-			VdbShaderElementData.CustomIntData0[0] *= 2; // Max number of steps
-			VdbShaderElementData.CustomIntData0[1] *= 2; // Samples per pixels
-		}
-		else if (CinematicMode == 2)
-		{
-			VdbShaderElementData.CustomFloatData0[0] /= 10.f; // local step size
-			VdbShaderElementData.CustomFloatData0[1] = FMath::Max(1.f, VdbShaderElementData.CustomFloatData0[1] / 10.f); // local shadow step size
-			VdbShaderElementData.CustomIntData0[0] *= 4; // Max number of steps
-			VdbShaderElementData.CustomIntData0[1] *= 4; // Samples per pixels
-			bTrilinearSampling = true;
-		}
+		FRDGBufferRef CulledLightDataGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint16));
+		ForwardLightData.CulledLightDataGrid = GraphBuilder.CreateSRV(CulledLightDataGrid, PF_R16_UINT);
 	}
-
-	virtual void AddMeshBatch(const FMeshBatch& RESTRICT MeshBatch, uint64 BatchElementMask, const FPrimitiveSceneProxy* RESTRICT PrimitiveSceneProxy, int32 StaticMeshId = -1) override final
+	else
 	{
-		const FMaterialRenderProxy* MaterialRenderProxy = MeshBatch.MaterialRenderProxy;
-		const FMaterial* Material = MaterialRenderProxy->GetMaterialNoFallback(FeatureLevel);
-
-		if (Material && Material->GetMaterialDomain() == MD_Volume && Material->GetRenderingThreadShaderMap())
-		{
-			const ERasterizerFillMode MeshFillMode = FM_Solid;
-			const ERasterizerCullMode MeshCullMode = MeshBatch.ReverseCulling ? CM_CW : CM_CCW;
-
-			#define PROCESS_SHADER(shader) { Process<FVdbShaderVS, ##shader>(MeshBatch, BatchElementMask, PrimitiveSceneProxy, *MaterialRenderProxy, *Material, StaticMeshId, MeshFillMode, MeshCullMode); }
-
-			if (bLevelSet)
-			{
-				if (bTranslucentLevelSet && bImprovedSkylight)
-					PROCESS_SHADER(FVdbShaderPS_LevelSet_Translucent_EnvLight)
-				else if (bTranslucentLevelSet)
-					PROCESS_SHADER(FVdbShaderPS_LevelSet_Translucent)
-				else
-					PROCESS_SHADER(FVdbShaderPS_LevelSet)
-			}
-			else
-			{
-				// combination of 4 params: 2^4 = 16 different cases
-				// TODO: this is getting ridiculous, find better solution
-				if (!bTemperatureVdb && !bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume)
-				else if (!bTemperatureVdb && !bColorVdb && !bImprovedSkylight && bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Trilinear)
-				else if (!bTemperatureVdb && !bColorVdb && bImprovedSkylight && !bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_EnvLight)
-				else if (!bTemperatureVdb && !bColorVdb && bImprovedSkylight && bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_EnvLight_Trilinear)
-				else if (!bTemperatureVdb && bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color)
-				else if (!bTemperatureVdb && bColorVdb && !bImprovedSkylight && bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_Trilinear)
-				else if (!bTemperatureVdb && bColorVdb && bImprovedSkylight && !bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_EnvLight)
-				else if (!bTemperatureVdb && bColorVdb && bImprovedSkylight && bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_EnvLight_Trilinear)
-				else if (bTemperatureVdb && !bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody)
-				else if (bTemperatureVdb && !bColorVdb && !bImprovedSkylight && bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Trilinear)
-				else if (bTemperatureVdb && !bColorVdb && bImprovedSkylight && !bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_EnvLight)
-				else if (bTemperatureVdb && !bColorVdb && bImprovedSkylight && bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_EnvLight_Trilinear)
-				else if (bTemperatureVdb && bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color)
-				else if (bTemperatureVdb && bColorVdb && !bImprovedSkylight && bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_Trilinear)
-				else if (bTemperatureVdb && bColorVdb && bImprovedSkylight && !bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight)
-				else if (bTemperatureVdb && bColorVdb && bImprovedSkylight && bTrilinearSampling)
-					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear)
-			}
-		}
+		FRDGBufferRef CulledLightDataGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint32));
+		ForwardLightData.CulledLightDataGrid = GraphBuilder.CreateSRV(CulledLightDataGrid, PF_R32_UINT);
 	}
+}
 
-private:
-
-	template<typename VertexShaderType, typename PixelShaderType>
-	bool GetPassShaders(
-		const FMaterial& Material,
-		FVertexFactoryType* VertexFactoryType,
-		TShaderRef<VertexShaderType>& VertexShader,
-		TShaderRef<PixelShaderType>& PixelShader
-	)
-	{
-		FMaterialShaderTypes ShaderTypes;
-		ShaderTypes.AddShaderType<VertexShaderType>();
-		ShaderTypes.AddShaderType<PixelShaderType>();
-
-		FMaterialShaders Shaders;
-		if (!Material.TryGetShaders(ShaderTypes, VertexFactoryType, Shaders))
-		{
-			return false;
-		}
-
-		Shaders.TryGetVertexShader(VertexShader);
-		Shaders.TryGetPixelShader(PixelShader);
-
-		return VertexShader.IsValid() && PixelShader.IsValid();
-	}
-
-	template<typename VertexShaderType, typename PixelShaderType>
-	void Process(
-		const FMeshBatch& MeshBatch,
-		uint64 BatchElementMask,
-		const FPrimitiveSceneProxy* RESTRICT PrimitiveSceneProxy,
-		const FMaterialRenderProxy& RESTRICT MaterialRenderProxy,
-		const FMaterial& RESTRICT MaterialResource,
-		int32 StaticMeshId,
-		ERasterizerFillMode MeshFillMode,
-		ERasterizerCullMode MeshCullMode)
-	{
-		VdbShaderElementData.InitializeMeshMaterialData(ViewIfDynamicMeshCommand, PrimitiveSceneProxy, MeshBatch, StaticMeshId, false);
-
-		const FVertexFactory* VertexFactory = MeshBatch.VertexFactory;
-
-		TMeshProcessorShaders<VertexShaderType, PixelShaderType> PassShaders;
-		if (!GetPassShaders(
-			MaterialResource,
-			VertexFactory->GetType(),
-			PassShaders.VertexShader,
-			PassShaders.PixelShader))
-		{
-			return;
-		}
-
-
-		const FMeshDrawCommandSortKey SortKey = CalculateMeshStaticSortKey(PassShaders.VertexShader, PassShaders.PixelShader);
-		BuildMeshDrawCommands(
-			MeshBatch,
-			BatchElementMask,
-			PrimitiveSceneProxy,
-			MaterialRenderProxy,
-			MaterialResource,
-			PassDrawRenderState,
-			PassShaders,
-			MeshFillMode,
-			MeshCullMode,
-			SortKey,
-			EMeshPassFeatures::Default,
-			VdbShaderElementData);
-	}
-
-	FMeshPassProcessorRenderState PassDrawRenderState;
-	FVdbElementData VdbShaderElementData;
-	bool bLevelSet;
-	bool bTranslucentLevelSet;
-	bool bImprovedSkylight;
-	bool bTrilinearSampling;
-	bool bTemperatureVdb;
-	bool bColorVdb;
-};
+TRDGUniformBufferRef<FForwardLightData> CreateDummyForwardLightUniformBuffer(FRDGBuilder& GraphBuilder)
+{
+	FForwardLightData* ForwardLightData = GraphBuilder.AllocParameters<FForwardLightData>();
+	SetupDummyForwardLightUniformParameters(GraphBuilder, *ForwardLightData);
+	return GraphBuilder.CreateUniformBuffer(ForwardLightData);
+}
 
 //-----------------------------------------------------------------------------
 //--- FVdbMaterialRendering
@@ -326,8 +164,10 @@ void FVdbMaterialRendering::InitDelegate()
 		IRendererModule* RendererModule = FModuleManager::GetModulePtr<IRendererModule>(RendererModuleName);
 		if (RendererModule)
 		{
-			RenderDelegate.BindRaw(this, &FVdbMaterialRendering::Render_RenderThread);
+			ShadowDepthDelegate.BindRaw(this, &FVdbMaterialRendering::ShadowDepth_RenderThread);
+			ShadowDepthDelegateHandle = RendererModule->RegisterShadowDepthRenderDelegate(ShadowDepthDelegate);
 
+			RenderDelegate.BindRaw(this, &FVdbMaterialRendering::Render_RenderThread);
 			// Render VDBs before or after Transparent objects
 			if (FVdbCVars::CVarVolumetricVdbAfterTransparents.GetValueOnRenderThread())
 			{
@@ -350,14 +190,18 @@ void FVdbMaterialRendering::ReleaseDelegate()
 		if (RendererModule)
 		{
 			RendererModule->RemovePostOpaqueRenderDelegate(RenderDelegateHandle);
+			RendererModule->RemovePostOpaqueRenderDelegate(ShadowDepthDelegateHandle);
 		}
 
 		RenderDelegateHandle.Reset();
+		ShadowDepthDelegateHandle.Reset();
 	}
 }
 
-void FVdbMaterialRendering::CreateMeshBatch(FMeshBatch& MeshBatch, const FVdbMaterialSceneProxy* PrimitiveProxy, FVdbVertexFactoryUserDataWrapper& UserData, const FMaterialRenderProxy* MaterialProxy) const
+void FVdbMaterialRendering::CreateMeshBatch(const FSceneView* View, FMeshBatch& MeshBatch, const FVdbMaterialSceneProxy* PrimitiveProxy, FVdbVertexFactoryUserDataWrapper& UserData, const FMaterialRenderProxy* MaterialProxy) const
 {
+	const FPrimitiveViewRelevance& ViewRelevance = PrimitiveProxy->GetViewRelevance(View);
+
 	MeshBatch.bUseWireframeSelectionColoring = PrimitiveProxy->IsSelected();
 	MeshBatch.VertexFactory = VertexFactory.Get();
 	MeshBatch.MaterialRenderProxy = MaterialProxy;
@@ -366,8 +210,9 @@ void FVdbMaterialRendering::CreateMeshBatch(FMeshBatch& MeshBatch, const FVdbMat
 	MeshBatch.DepthPriorityGroup = SDPG_World;
 	MeshBatch.bCanApplyViewModeOverrides = true;
 	MeshBatch.bUseForMaterial = true;
-	MeshBatch.CastShadow = false;
+	MeshBatch.CastShadow = ViewRelevance.bShadowRelevance;
 	MeshBatch.bUseForDepthPass = false;
+
 
 	FMeshBatchElement& BatchElement = MeshBatch.Elements[0];
 	BatchElement.PrimitiveUniformBuffer = PrimitiveProxy->GetUniformBuffer();
@@ -378,6 +223,125 @@ void FVdbMaterialRendering::CreateMeshBatch(FMeshBatch& MeshBatch, const FVdbMat
 	BatchElement.NumPrimitives = VertexBuffer->NumPrimitives;
 	BatchElement.VertexFactoryUserData = VertexFactory->GetUniformBuffer();
 	BatchElement.UserData = &UserData;
+}
+
+void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters& Parameters)
+{
+	// TODO LATER: manual culling I guess ?
+
+	const FSceneView* View = static_cast<const FSceneView*>(Parameters.ShadowDepthView);
+	const FMatrix& ViewMat = View->ShadowViewMatrices.GetViewMatrix();
+
+	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return !Proxy->IsTranslucent()/* && Proxy->IsVisible(View)*/; });
+	OpaqueProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
+		{
+			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
+			const FVector& RightProxyCenter = Rhs.GetBounds().GetSphere().Center;
+			return ViewMat.TransformPosition(LeftProxyCenter).Z < ViewMat.TransformPosition(RightProxyCenter).Z; // front to back
+		});
+
+	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return Proxy->IsTranslucent()/* && Proxy->IsVisible(View)*/; });
+	TranslucentProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
+		{
+			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
+			const FVector& RightProxyCenter = Rhs.GetBounds().GetSphere().Center;
+			return ViewMat.TransformPosition(LeftProxyCenter).Z > ViewMat.TransformPosition(RightProxyCenter).Z; // back to front
+		});
+
+	auto DrawVdbProxies = [&](const TArray<FVdbMaterialSceneProxy*>& Proxies, TRDGUniformBufferRef<FVdbDepthShaderParams>& VdbUniformBuffer, bool Translucent)
+	{
+		FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
+
+		FVdbShadowDepthPassParameters* PassParameters = GraphBuilder.AllocParameters<FVdbShadowDepthPassParameters>();
+		PassParameters->View = Parameters.ShadowDepthView->ViewUniformBuffer;
+		PassParameters->DeferredPassUniformBuffer = Parameters.DeferredPassUniformBuffer;
+		PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
+		PassParameters->VdbUniformBuffer = VdbUniformBuffer;
+		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
+			Parameters.ShadowDepthTexture,
+			ERenderTargetLoadAction::ELoad,
+			ERenderTargetLoadAction::ENoAction,
+			FExclusiveDepthStencil::DepthWrite_StencilNop);
+
+		GraphBuilder.AddPass(
+			Translucent ? RDG_EVENT_NAME("Vdb Translucent Rendering") : RDG_EVENT_NAME("Vdb Opaque Rendering"),
+			PassParameters,
+			ERDGPassFlags::Raster,
+			[this, &InView = *View, Parameters, Proxies](FRHICommandListImmediate& RHICmdList)
+			{
+				SCOPED_DRAW_EVENT(RHICmdList, StatVdbShadowDepthMaterial);
+				SCOPED_GPU_STAT(RHICmdList, StatVdbShadowDepthMaterial);
+
+				Parameters.ProjectedShadowInfo->SetStateForView(RHICmdList);
+
+				FRHITextureViewCache TexCache;
+
+				for (const FVdbMaterialSceneProxy* Proxy : Proxies)
+				{
+					if (Proxy && Proxy->GetMaterial() && /*Proxy->IsVisible(&InView) &&*/ Proxy->GetDensityRenderResource())
+					{
+						DrawDynamicMeshPass(InView, RHICmdList,
+							[&](FDynamicPassMeshDrawListContext* DynamicMeshPassContext)
+							{
+								FVdbShadowDepthShaderElementData ShaderElementData;
+								ShaderElementData.CustomIntData0 = Proxy->GetCustomIntData0();
+								ShaderElementData.CustomIntData1 = Proxy->GetCustomIntData1();
+								ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0();
+								ShaderElementData.CustomFloatData1 = Proxy->GetCustomFloatData1();
+								ShaderElementData.CustomFloatData2 = Proxy->GetCustomFloatData2();
+								ShaderElementData.DensityBufferSRV = Proxy->GetDensityRenderResource()->GetBufferSRV();
+								ShaderElementData.TemperatureBufferSRV = nullptr;
+								ShaderElementData.ColorBufferSRV = nullptr;
+								if (!ShaderElementData.DensityBufferSRV)
+									return;
+
+								FVdbDepthMeshProcessor PassMeshProcessor(
+									InView.Family->Scene->GetRenderScene(),
+									&InView,
+									DynamicMeshPassContext,
+									CSMVdbShadowDepthType,
+									EMeshPass::CSMShadowDepth, // TODO: support VSM (no support for masking right now so it's useless to try support VSM)
+									Proxy->IsLevelSet(), 
+									MoveTemp(ShaderElementData));
+								//ShadowInfo->bOnePassPointLightShadow
+
+								FVdbVertexFactoryUserDataWrapper UserData;
+								UserData.Data.IndexMin = Proxy->GetIndexMin() - ShaderElementData.CustomFloatData2.Y;
+								UserData.Data.IndexSize = Proxy->GetIndexSize() + 2.0 * ShaderElementData.CustomFloatData2.Y;
+								UserData.Data.IndexToLocal = Proxy->GetIndexToLocal();
+
+								FMeshBatch VolumeMesh;
+								CreateMeshBatch(&InView, VolumeMesh, Proxy, UserData, Proxy->GetMaterial()->GetRenderProxy());
+
+								if (VolumeMesh.CastShadow)
+								{
+									const uint64 DefaultBatchElementMask = ~0ull; // or 1 << 0; // LOD 0 only
+									PassMeshProcessor.AddMeshBatch(VolumeMesh, DefaultBatchElementMask, Proxy);
+								}
+							}
+						);
+					}
+				}
+			});
+	};
+
+	FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
+	FVdbDepthShaderParams* UniformParameters = GraphBuilder.AllocParameters<FVdbDepthShaderParams>();
+	UniformParameters->ShadowClipToTranslatedWorld = Parameters.ProjectedShadowInfo->TranslatedWorldToClipOuterMatrix.Inverse();
+	UniformParameters->ShadowPreViewTranslation = FVector3f(Parameters.ProjectedShadowInfo->PreShadowTranslation);
+	TRDGUniformBufferRef<FVdbDepthShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(UniformParameters);
+	
+	if (!OpaqueProxies.IsEmpty())
+	{
+		SCOPE_CYCLE_COUNTER(STAT_VdbOpaque_RT);
+		DrawVdbProxies(OpaqueProxies, VdbUniformBuffer, false);
+	}
+
+	if (!TranslucentProxies.IsEmpty())
+	{
+		SCOPE_CYCLE_COUNTER(STAT_VdbTranslucent_RT);
+		DrawVdbProxies(TranslucentProxies, VdbUniformBuffer, true);
+	}
 }
 
 void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Parameters)
@@ -391,17 +355,17 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 	RDG_GPU_STAT_SCOPE(*Parameters.GraphBuilder, StatVdbMaterial);
 
 	const FSceneView* View = static_cast<FSceneView*>(Parameters.Uid);
+	const FMatrix& ViewMat = View->ViewMatrices.GetViewMatrix();
 
 	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return !Proxy->IsTranslucent() && Proxy->IsVisible(View); });
-	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return Proxy->IsTranslucent() && Proxy->IsVisible(View); });
-
-	const FMatrix& ViewMat = View->ViewMatrices.GetViewMatrix();
 	OpaqueProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool 
 		{ 
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
 			const FVector& RightProxyCenter = Rhs.GetBounds().GetSphere().Center;
 			return ViewMat.TransformPosition(LeftProxyCenter).Z < ViewMat.TransformPosition(RightProxyCenter).Z; // front to back
 		});
+
+	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return Proxy->IsTranslucent() && Proxy->IsVisible(View); });
 	TranslucentProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
 		{
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
@@ -409,147 +373,21 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			return ViewMat.TransformPosition(LeftProxyCenter).Z > ViewMat.TransformPosition(RightProxyCenter).Z; // back to front
 		});
 
-	const FViewInfo* ViewInfo = static_cast<const FViewInfo*>(View);
-	const FSceneViewFamily* ViewFamily = View->Family;
-	const FScene* Scene = (FScene*)ViewFamily->Scene;
-	FLightSceneInfo* SimpleDirectional = Scene->SimpleDirectionalLight;
-
-	auto DrawVdbProxies = [&](const TArray<FVdbMaterialSceneProxy*>& Proxies, bool Translucent, TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer, FRDGTexture* RenderTexture, FRDGTexture* DepthRenderTexture)
-	{
-		FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
-
-		bool bWriteDepth = DepthRenderTexture != nullptr;
-
-		auto* PassParameters = GraphBuilder.AllocParameters<FVdbShaderParametersPS>();
-		PassParameters->View = View->ViewUniformBuffer;
-		PassParameters->VdbUniformBuffer = VdbUniformBuffer;
-		PassParameters->InstanceCulling = FInstanceCullingContext::CreateDummyInstanceCullingUniformBuffer(GraphBuilder);
-		if (RenderTexture)
-		{
-			PassParameters->RenderTargets[0] = FRenderTargetBinding(RenderTexture, ERenderTargetLoadAction::EClear);
-			// Don't bind depth buffer, we will read it in Pixel Shader instead
-			if (bWriteDepth)
-			{
-				PassParameters->RenderTargets.DepthStencil =
-					FDepthStencilBinding(DepthRenderTexture, ERenderTargetLoadAction::EClear, FExclusiveDepthStencil::DepthWrite_StencilNop);
-			}
-		}
-		else
-		{
-			PassParameters->RenderTargets[0] = FRenderTargetBinding(Parameters.ColorTexture, ERenderTargetLoadAction::ELoad);
-			PassParameters->RenderTargets.DepthStencil =
-				FDepthStencilBinding(Parameters.DepthTexture, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthWrite_StencilNop);
-		}
-
-		//if (bSampleVirtualShadowMap)
-		{
-			if (SimpleDirectional != nullptr)
-			{
-				const FVisibleLightInfo& Light0 = Parameters.VisibleLightInfos[SimpleDirectional->Id];
-				const FProjectedShadowInfo* ProjectedShadowInfo = GetShadowForInjectionIntoVolumetricFog(Light0);
-				bool bDynamicallyShadowed = ProjectedShadowInfo != NULL;
-				if (bDynamicallyShadowed)
-				{
-					GetVolumeShadowingShaderParameters(GraphBuilder, *ViewInfo, SimpleDirectional, ProjectedShadowInfo, PassParameters->VolumeShadowingShaderParameters);
-				}
-				else
-				{
-					SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, PassParameters->VolumeShadowingShaderParameters);
-				}
-			}
-			else
-			{
-				SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, PassParameters->VolumeShadowingShaderParameters);
-			}
-			PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
-		}
-
-		GraphBuilder.AddPass(
-			Translucent ? RDG_EVENT_NAME("Vdb Translucent Rendering") : RDG_EVENT_NAME("Vdb Opaque Rendering"),
-			PassParameters,
-			ERDGPassFlags::Raster,
-			[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxies, bWriteDepth](FRHICommandListImmediate& RHICmdList)
-		{
-			SCOPED_DRAW_EVENT(RHICmdList, StatVdbMaterial);
-			SCOPED_GPU_STAT(RHICmdList, StatVdbMaterial);
-
-			RHICmdList.SetViewport(ViewportRect.Min.X, ViewportRect.Min.Y, 0.0f, ViewportRect.Max.X, ViewportRect.Max.Y, 1.0f);
-			RHICmdList.SetScissorRect(false, 0, 0, 0, 0);
-
-			FRHITextureViewCache TexCache;
-
-			for (const FVdbMaterialSceneProxy* Proxy : Proxies)
-			{
-				if (Proxy && Proxy->GetMaterial() && Proxy->IsVisible(&InView) && Proxy->GetDensityRenderResource())
-				{
-					DrawDynamicMeshPass(InView, RHICmdList,
-						[&](FDynamicPassMeshDrawListContext* DynamicMeshPassContext)
-						{
-							FVdbElementData ShaderElementData;
-							ShaderElementData.CustomIntData0 = Proxy->GetCustomIntData0();
-							ShaderElementData.CustomIntData1 = Proxy->GetCustomIntData1();
-							ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0();
-							ShaderElementData.CustomFloatData1 = Proxy->GetCustomFloatData1();
-							ShaderElementData.CustomFloatData2 = Proxy->GetCustomFloatData2();
-							ShaderElementData.DensityBufferSRV = Proxy->GetDensityRenderResource()->GetBufferSRV();
-							ShaderElementData.TemperatureBufferSRV = Proxy->GetTemperatureRenderResource() ? Proxy->GetTemperatureRenderResource()->GetBufferSRV() : nullptr;
-							ShaderElementData.ColorBufferSRV = Proxy->GetColorRenderResource() ? Proxy->GetColorRenderResource()->GetBufferSRV() : nullptr;
-							if (!ShaderElementData.DensityBufferSRV)
-								return;
-
-							FTexture* CurveAtlas = Proxy->GetBlackbodyAtlasResource();
-							FTextureRHIRef CurveAtlasRHI = CurveAtlas ? CurveAtlas->GetTextureRHI() : nullptr;
-							ShaderElementData.BlackbodyColorSRV = CurveAtlasRHI ? TexCache.GetOrCreateSRV(CurveAtlasRHI, FRHITextureSRVCreateInfo()) : GBlackTextureWithSRV->ShaderResourceViewRHI;
-
-							FVdbMeshProcessor PassMeshProcessor(
-								InView.Family->Scene->GetRenderScene(),
-								&InView,
-								DynamicMeshPassContext,
-								Proxy->IsLevelSet(), Proxy->IsTranslucentLevelSet(),
-								Proxy->UseImprovedSkylight(),
-								Proxy->UseTrilinearSampling() || FVdbCVars::CVarVolumetricVdbTrilinear.GetValueOnRenderThread(),
-								bWriteDepth,
-								ShaderElementData.TemperatureBufferSRV != nullptr,
-								ShaderElementData.ColorBufferSRV != nullptr,
-								MoveTemp(ShaderElementData));
-
-							FVdbVertexFactoryUserDataWrapper UserData;
-							UserData.Data.IndexMin = Proxy->GetIndexMin() - ShaderElementData.CustomFloatData2.Y;
-							UserData.Data.IndexSize = Proxy->GetIndexSize() + 2.0*ShaderElementData.CustomFloatData2.Y;
-							UserData.Data.IndexToLocal = Proxy->GetIndexToLocal();
-
-							FMeshBatch VolumeMesh;
-							CreateMeshBatch(VolumeMesh, Proxy, UserData, Proxy->GetMaterial()->GetRenderProxy());
-
-							const uint64 DefaultBatchElementMask = ~0ull; // or 1 << 0; // LOD 0 only
-							PassMeshProcessor.AddMeshBatch(VolumeMesh, DefaultBatchElementMask, Proxy);
-						}
-					);
-				}
-			}
-		});
-	};
+	//const FViewInfo* ViewInfo = static_cast<const FViewInfo*>(View);
+	//const FSceneViewFamily* ViewFamily = View->Family;
+	//const FScene* Scene = (FScene*)ViewFamily->Scene;
+	//FLightSceneInfo* SimpleDirectional = Scene->SimpleDirectionalLight;
 
 	FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
-
-	FVdbShaderParams* UniformParameters = GraphBuilder.AllocParameters<FVdbShaderParams>();
-	UniformParameters->SceneDepthTexture = Parameters.DepthTexture;
-	UniformParameters->Threshold = FMath::Max(0.0, FVdbCVars::CVarVolumetricVdbThreshold.GetValueOnAnyThread());
-	UniformParameters->LinearTexSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
-	UniformParameters->ShadowStepSize = 8.f;
-	UniformParameters->VirtualShadowMapId = SimpleDirectional ? Parameters.VisibleLightInfos[SimpleDirectional->Id].GetVirtualShadowMapId(ViewInfo) : -1;
-	UniformParameters->ForwardLightData = *ViewInfo->ForwardLightingResources.ForwardLightData;
-
-	FVolumeShadowingShaderParametersGlobal0 LightShadowShaderParams0;
-	SetVolumeShadowingDefaultShaderParameters(GraphBuilder, LightShadowShaderParams0);
-	UniformParameters->Light0Shadow = LightShadowShaderParams0;
-
-	TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(UniformParameters);
 
 	if (!OpaqueProxies.IsEmpty())
 	{
 		SCOPE_CYCLE_COUNTER(STAT_VdbOpaque_RT);
-		DrawVdbProxies(OpaqueProxies, false, VdbUniformBuffer, nullptr, nullptr);
+		//DrawVdbProxies(OpaqueProxies, false, VdbUniformBuffer, nullptr, nullptr);
+		for (const FVdbMaterialSceneProxy* Proxy : OpaqueProxies)
+		{
+			RenderLights(Proxy, false, Parameters, nullptr, nullptr);
+		}
 	}
 
 	if (!TranslucentProxies.IsEmpty())
@@ -582,7 +420,11 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 				TEXT("VdbMaterialDepth"));
 		}
 
-		DrawVdbProxies(TranslucentProxies, true, VdbUniformBuffer, VdbCurrRenderTexture, DepthTestTexture);
+		//DrawVdbProxies(TranslucentProxies, true, VdbUniformBuffer, VdbCurrRenderTexture, DepthTestTexture);
+		for (const FVdbMaterialSceneProxy* Proxy : TranslucentProxies)
+		{
+			RenderLights(Proxy, true, Parameters, VdbCurrRenderTexture, DepthTestTexture);
+		}
 
 		// Add optional post-processing (blurring, denoising etc.)
 		EVdbDenoiserMethod Method = FVdbCVars::CVarVolumetricVdbDenoiser.GetValueOnAnyThread() >= 0 ?
@@ -600,6 +442,268 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			View);
 	}
 }
+
+void FVdbMaterialRendering::RenderLights(
+	// Object Data
+	const FVdbMaterialSceneProxy* Proxy,
+	bool Translucent, 
+	// Scene data
+	const FPostOpaqueRenderParameters& Parameters,
+	FRDGTexture* RenderTexture, 
+	FRDGTexture* DepthRenderTexture)
+{
+	const FSceneView* View = static_cast<const FSceneView*>(Parameters.View);
+	//const FViewInfo* ViewInfo = static_cast<const FViewInfo*>(View);
+	const FSceneViewFamily* ViewFamily = View->Family;
+	const FScene* Scene = (FScene*)ViewFamily->Scene;
+
+	if (!Proxy || !Proxy->GetMaterial() || !Proxy->IsVisible(View) || !Proxy->GetDensityRenderResource())
+		return;
+
+	// Light culling
+	TArray<FLightSceneInfoCompact, TInlineAllocator<64>> LightSceneInfoCompact;
+	for (auto LightIt = Scene->Lights.CreateConstIterator(); LightIt; ++LightIt)
+	{
+		if (LightIt->AffectsPrimitive(Proxy->GetBounds(), Proxy))
+		{
+			LightSceneInfoCompact.Add(*LightIt);
+		}
+	}
+
+	// Light loop:
+	int32 NumPasses = FMath::Max(LightSceneInfoCompact.Num(), 1);
+	for (int32 PassIndex = 0; PassIndex < NumPasses; ++PassIndex)
+	{
+		bool bApplyEmissionAndTransmittance = PassIndex == 0;
+		bool bApplyDirectLighting = !LightSceneInfoCompact.IsEmpty();
+		bool bApplyShadowTransmittance = false;
+
+		uint32 LightType = 0;
+		FLightSceneInfo* LightSceneInfo = nullptr;
+		const FVisibleLightInfo* VisibleLightInfo = nullptr;
+		if (bApplyDirectLighting)
+		{
+			LightType = LightSceneInfoCompact[PassIndex].LightType;
+			LightSceneInfo = LightSceneInfoCompact[PassIndex].LightSceneInfo;
+			check(LightSceneInfo != nullptr);
+
+			bApplyDirectLighting = (LightSceneInfo != nullptr);
+			if (LightSceneInfo)
+			{
+				VisibleLightInfo = &Parameters.VisibleLightInfos[LightSceneInfo->Id];
+				bApplyShadowTransmittance = LightSceneInfo->Proxy->CastsVolumetricShadow();
+			}
+		}
+
+		RenderLight(
+			// Object data
+			Proxy,
+			Translucent,
+			// Light data
+			bApplyEmissionAndTransmittance,
+			bApplyDirectLighting,
+			bApplyShadowTransmittance,
+			LightType,
+			LightSceneInfo,
+			VisibleLightInfo,
+			// Scene data
+			Parameters,
+			RenderTexture,
+			DepthRenderTexture
+		);
+	}
+}
+
+void SetupRenderPassParameters(
+	FRDGBuilder& GraphBuilder,
+	FVdbShaderParametersPS* PassParameters,
+	// Light data
+	bool ApplyEmissionAndTransmittance,
+	bool ApplyDirectLighting,
+	bool ApplyShadowTransmittance,
+	uint32 LightType,
+	FLightSceneInfo* LightSceneInfo,
+	const FVisibleLightInfo* VisibleLightInfo,
+	// Scene data
+	const FPostOpaqueRenderParameters& Parameters,
+	const FViewInfo* ViewInfo
+)
+{
+	FVdbShaderParams* UniformParameters = GraphBuilder.AllocParameters<FVdbShaderParams>();
+
+	// Scene data
+	UniformParameters->SceneDepthTexture = Parameters.DepthTexture;
+	UniformParameters->LinearTexSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+	// Vdb data
+	UniformParameters->Threshold = FMath::Max(0.0, FVdbCVars::CVarVolumetricVdbThreshold.GetValueOnAnyThread());
+
+	// Light data
+	FDeferredLightUniformStruct DeferredLightUniform;
+	UniformParameters->bApplyEmissionAndTransmittance = ApplyEmissionAndTransmittance;
+	UniformParameters->bApplyDirectLighting = ApplyDirectLighting;
+	UniformParameters->bApplyShadowTransmittance = ApplyShadowTransmittance;
+	UniformParameters->LightType = LightType;
+	if (ApplyDirectLighting && (LightSceneInfo != nullptr))
+	{
+		DeferredLightUniform = GetDeferredLightParameters(*ViewInfo, *LightSceneInfo);
+		UniformParameters->VolumetricScatteringIntensity = LightSceneInfo->Proxy->GetVolumetricScatteringIntensity();
+	}
+	PassParameters->DeferredLight = CreateUniformBufferImmediate(DeferredLightUniform, UniformBuffer_SingleDraw);
+
+	// Shadow data
+	UniformParameters->ShadowStepSize = 8.0;// todo make a variable
+	UniformParameters->ForwardLightData = *ViewInfo->ForwardLightingResources.ForwardLightData;
+	if (VisibleLightInfo != nullptr)
+	{
+		const FProjectedShadowInfo* ProjectedShadowInfo = GetShadowForInjectionIntoVolumetricFog(*VisibleLightInfo);
+		bool bDynamicallyShadowed = ProjectedShadowInfo != NULL;
+		if (bDynamicallyShadowed)
+		{
+			GetVolumeShadowingShaderParameters(GraphBuilder, *ViewInfo, LightSceneInfo, ProjectedShadowInfo, PassParameters->VolumeShadowingShaderParameters);
+		}
+		else
+		{
+			SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, PassParameters->VolumeShadowingShaderParameters);
+		}
+		UniformParameters->VirtualShadowMapId = VisibleLightInfo->GetVirtualShadowMapId(ViewInfo);
+	}
+	else
+	{
+		SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, PassParameters->VolumeShadowingShaderParameters);
+	}
+	PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
+
+	// Indirect lighting data
+	auto* LumenUniforms = GraphBuilder.AllocParameters<FLumenTranslucencyLightingUniforms>();
+	LumenUniforms->Parameters = GetLumenTranslucencyLightingParameters(GraphBuilder, ViewInfo->LumenTranslucencyGIVolume, ViewInfo->LumenFrontLayerTranslucency);
+	PassParameters->LumenGIVolumeStruct = GraphBuilder.CreateUniformBuffer(LumenUniforms);
+
+	// Pass params
+	PassParameters->DeferredLight = CreateUniformBufferImmediate(DeferredLightUniform, UniformBuffer_SingleDraw);
+	PassParameters->View = ViewInfo->ViewUniformBuffer;
+	PassParameters->InstanceCulling = FInstanceCullingContext::CreateDummyInstanceCullingUniformBuffer(GraphBuilder);
+
+	// Finalize VdbUniformBuffer
+	TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(UniformParameters);
+	PassParameters->VdbUniformBuffer = VdbUniformBuffer;
+}
+
+void FVdbMaterialRendering::RenderLight(
+	// Object data
+	const FVdbMaterialSceneProxy* Proxy,
+	bool Translucent,
+	// Light data
+	bool ApplyEmissionAndTransmittance,
+	bool ApplyDirectLighting,
+	bool ApplyShadowTransmittance,
+	uint32 LightType,
+	FLightSceneInfo* LightSceneInfo,
+	const FVisibleLightInfo* VisibleLightInfo,
+	// Scene data
+	const FPostOpaqueRenderParameters& Parameters,
+	FRDGTexture* RenderTexture,
+	FRDGTexture* DepthRenderTexture)
+{
+	const FSceneView* View = static_cast<FSceneView*>(Parameters.Uid);
+	const FViewInfo* ViewInfo = static_cast<const FViewInfo*>(View);
+
+	FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
+
+	FVdbShaderParametersPS* PassParameters = GraphBuilder.AllocParameters<FVdbShaderParametersPS>();
+	SetupRenderPassParameters(
+		GraphBuilder,
+		PassParameters, 
+		ApplyEmissionAndTransmittance, 
+		ApplyDirectLighting, 
+		ApplyShadowTransmittance, 
+		LightType,
+		LightSceneInfo,
+		VisibleLightInfo,
+		Parameters,
+		ViewInfo);
+
+	// Render Targets
+	bool bWriteDepth = DepthRenderTexture != nullptr;
+	if (RenderTexture)
+	{
+		PassParameters->RenderTargets[0] = FRenderTargetBinding(RenderTexture, ERenderTargetLoadAction::EClear);
+		// Don't bind depth buffer, we will read it in Pixel Shader instead
+		if (bWriteDepth)
+		{
+			PassParameters->RenderTargets.DepthStencil =
+				FDepthStencilBinding(DepthRenderTexture, ERenderTargetLoadAction::EClear, FExclusiveDepthStencil::DepthWrite_StencilNop);
+		}
+	}
+	else
+	{
+		PassParameters->RenderTargets[0] = FRenderTargetBinding(Parameters.ColorTexture, ERenderTargetLoadAction::ELoad);
+		PassParameters->RenderTargets.DepthStencil =
+			FDepthStencilBinding(Parameters.DepthTexture, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthWrite_StencilNop);
+	}
+
+	GraphBuilder.AddPass(
+		Translucent ? RDG_EVENT_NAME("Vdb Translucent Rendering") : RDG_EVENT_NAME("Vdb Opaque Rendering"),
+		PassParameters,
+		ERDGPassFlags::Raster,
+		[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxy, bWriteDepth](FRHICommandListImmediate& RHICmdList)
+		{
+			SCOPED_DRAW_EVENT(RHICmdList, StatVdbMaterial);
+			SCOPED_GPU_STAT(RHICmdList, StatVdbMaterial);
+
+			RHICmdList.SetViewport(ViewportRect.Min.X, ViewportRect.Min.Y, 0.0f, ViewportRect.Max.X, ViewportRect.Max.Y, 1.0f);
+			RHICmdList.SetScissorRect(false, 0, 0, 0, 0);
+
+			FRHITextureViewCache TexCache;
+
+			DrawDynamicMeshPass(InView, RHICmdList,
+				[&](FDynamicPassMeshDrawListContext* DynamicMeshPassContext)
+				{
+					FVdbElementData ShaderElementData;
+					ShaderElementData.CustomIntData0 = Proxy->GetCustomIntData0();
+					ShaderElementData.CustomIntData1 = Proxy->GetCustomIntData1();
+					ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0();
+					ShaderElementData.CustomFloatData1 = Proxy->GetCustomFloatData1();
+					ShaderElementData.CustomFloatData2 = Proxy->GetCustomFloatData2();
+					ShaderElementData.DensityBufferSRV = Proxy->GetDensityRenderResource()->GetBufferSRV();
+					ShaderElementData.TemperatureBufferSRV = Proxy->GetTemperatureRenderResource() ? Proxy->GetTemperatureRenderResource()->GetBufferSRV() : nullptr;
+					ShaderElementData.ColorBufferSRV = Proxy->GetColorRenderResource() ? Proxy->GetColorRenderResource()->GetBufferSRV() : nullptr;
+					if (!ShaderElementData.DensityBufferSRV)
+						return;
+
+					FTexture* CurveAtlas = Proxy->GetBlackbodyAtlasResource();
+					FTextureRHIRef CurveAtlasRHI = CurveAtlas ? CurveAtlas->GetTextureRHI() : nullptr;
+					ShaderElementData.BlackbodyColorSRV = CurveAtlasRHI ? TexCache.GetOrCreateSRV(CurveAtlasRHI, FRHITextureSRVCreateInfo()) : GBlackTextureWithSRV->ShaderResourceViewRHI;
+
+					FVdbMeshProcessor PassMeshProcessor(
+						InView.Family->Scene->GetRenderScene(),
+						&InView,
+						DynamicMeshPassContext,
+						Proxy->IsLevelSet(), Proxy->IsTranslucentLevelSet(),
+						false,
+						Proxy->UseImprovedSkylight(),
+						Proxy->UseTrilinearSampling() || FVdbCVars::CVarVolumetricVdbTrilinear.GetValueOnRenderThread(),
+						bWriteDepth,
+						ShaderElementData.TemperatureBufferSRV != nullptr,
+						ShaderElementData.ColorBufferSRV != nullptr,
+						MoveTemp(ShaderElementData));
+
+					FVdbVertexFactoryUserDataWrapper UserData;
+					UserData.Data.IndexMin = Proxy->GetIndexMin() - ShaderElementData.CustomFloatData2.Y;
+					UserData.Data.IndexSize = Proxy->GetIndexSize() + 2.0 * ShaderElementData.CustomFloatData2.Y;
+					UserData.Data.IndexToLocal = Proxy->GetIndexToLocal();
+
+					FMeshBatch VolumeMesh;
+					CreateMeshBatch(&InView, VolumeMesh, Proxy, UserData, Proxy->GetMaterial()->GetRenderProxy());
+
+					const uint64 DefaultBatchElementMask = ~0ull; // or 1 << 0; // LOD 0 only
+					PassMeshProcessor.AddMeshBatch(VolumeMesh, DefaultBatchElementMask, Proxy);
+				}
+			);
+			
+		}
+	);
+}
+
 
 void FVdbMaterialRendering::AddVdbProxy(FVdbMaterialSceneProxy* Proxy)
 {

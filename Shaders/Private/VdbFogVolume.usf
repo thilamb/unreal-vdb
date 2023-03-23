@@ -16,9 +16,9 @@
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/Random.ush"
 #include "/Engine/Private/ReflectionEnvironmentShared.ush"
+#include "/Plugin/VdbVolume/Private/VdbLightingUtils.ush"
 #include "/Engine/Generated/Material.ush"
 #include "/Engine/Generated/VertexFactory.ush"
-#include "/Plugin/VdbVolume/Private/VdbShadows.ush"
 
 int4 CustomIntData0;
 int4 CustomIntData1;
@@ -177,7 +177,7 @@ float4 RaymarchFogVolume(
 		float3 Color = 1.0;
 	#endif
 		
-		float OpaqueShadow = ComputeShadows(TranslatedWorldPos, DeviceZ);
+		float OpaqueShadow = 1.0;// ComputeShadows(TranslatedWorldPos, DeviceZ);
 
 		// Only support single directional lighting.
 		{

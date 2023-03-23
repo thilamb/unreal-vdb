@@ -71,6 +71,9 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
 	bool ColoredTransmittance = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
+	bool CastShadows = false;
+
 	// Enable temporal noise (including sub-frame variation for movie render queue)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
 	bool TemporalNoise = true;
@@ -81,7 +84,7 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 
 	// Density multiplier of the volume, modulating VdbPrincipal values 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (ClampMin = "0.0", UIMin = "0.0"))
-	float DensityMultiplier = 10.0;
+	float DensityMultiplier = 100.0;
 
 	// Scattering multiplier
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "5.0"))

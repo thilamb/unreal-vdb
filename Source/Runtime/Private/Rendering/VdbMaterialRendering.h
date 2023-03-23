@@ -35,7 +35,7 @@ public:
 	void AddVdbProxy(FVdbMaterialSceneProxy* Proxy);
 	void RemoveVdbProxy(FVdbMaterialSceneProxy* Proxy);
 
-	void CreateMeshBatch(struct FMeshBatch&, const FVdbMaterialSceneProxy*, struct FVdbVertexFactoryUserDataWrapper&, const class FMaterialRenderProxy*) const;
+	void CreateMeshBatch(const FSceneView* View, struct FMeshBatch&, const FVdbMaterialSceneProxy*, struct FVdbVertexFactoryUserDataWrapper&, const class FMaterialRenderProxy*) const;
 
 	//~ Setters
 	void SetDenoiserMethod(EVdbDenoiserMethod Method) { DenoiserMethod = Method; }
@@ -61,13 +61,41 @@ private:
 	void InitDelegate();
 	void ReleaseDelegate();
 
+	void ShadowDepth_RenderThread(FShadowDepthRenderParameters& Parameters);
 	void Render_RenderThread(FPostOpaqueRenderParameters& Parameters);
+
+	void RenderLights(
+		// Object Data
+		const FVdbMaterialSceneProxy* Proxy,
+		bool Translucent,
+		// Scene data
+		const FPostOpaqueRenderParameters& Parameters,
+		FRDGTexture* RenderTexture,
+		FRDGTexture* DepthRenderTexture);
+
+	void RenderLight(
+		// Object data
+		const FVdbMaterialSceneProxy* Proxy,
+		bool Translucent,
+		// Light data
+		bool ApplyEmissionAndTransmittance,
+		bool ApplyDirectLighting,
+		bool ApplyShadowTransmittance,
+		uint32 LightType,
+		FLightSceneInfo* LightSceneInfo,
+		const FVisibleLightInfo* VisibleLightInfo,
+		// Scene data
+		const FPostOpaqueRenderParameters& Parameters,
+		FRDGTexture* RenderTexture,
+		FRDGTexture* DepthRenderTexture);
 
 	TArray<FVdbMaterialSceneProxy*> VdbProxies;
 	TUniquePtr<class FVolumeMeshVertexBuffer> VertexBuffer;
 	TUniquePtr<class FVolumeMeshVertexFactory> VertexFactory;
 	FPostOpaqueRenderDelegate RenderDelegate;
 	FDelegateHandle RenderDelegateHandle;
+	FShadowDepthRenderDelegate ShadowDepthDelegate;
+	FDelegateHandle ShadowDepthDelegateHandle;
 
 	UTextureRenderTarget2D* DefaultVdbRenderTarget;
 	FTexture* DefaultVdbRenderTargetTex;
