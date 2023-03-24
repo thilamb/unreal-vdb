@@ -35,7 +35,7 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 	TranslucentLevelSet = LevelSet && InComponent->TranslucentLevelSet;
 	ImprovedSkylight = InComponent->ImprovedSkylight;
 	TrilinearSampling = InComponent->TrilinearSampling;
-	CastShadows = InComponent->CastShadows;
+	CastShadows = InComponent->CastShadow;
 
 	VdbMaterialRenderExtension = FVolumeRuntimeModule::GetRenderExtension(InComponent->RenderTarget);
 
@@ -117,7 +117,7 @@ FPrimitiveViewRelevance FVdbMaterialSceneProxy::GetViewRelevance(const FSceneVie
 {
 	FPrimitiveViewRelevance Result;
 	Result.bDrawRelevance = IsShown(View);
-	Result.bShadowRelevance = CastShadows;//&& IsShadowCast(View) && ShouldRenderInMainPass();
+	Result.bShadowRelevance = CastShadows && IsShadowCast(View) && ShouldRenderInMainPass();
 	Result.bDynamicRelevance = true;
 	Result.bStaticRelevance = false;
 	Result.bRenderInMainPass = ShouldRenderInMainPass();

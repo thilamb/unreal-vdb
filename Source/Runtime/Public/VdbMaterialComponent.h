@@ -22,7 +22,7 @@
 
 class UVdbAssetComponent;
 
-UCLASS(Blueprintable, ClassGroup = Rendering, HideCategories = (Activation, Input, Physics, Materials, Collision, Lighting, Input, LOD, HLOD, Mobile, Navigation, VirtualTexture))
+UCLASS(Blueprintable, ClassGroup = Rendering, HideCategories = (Activation, Input, Physics, Materials, Collision, Input, LOD, HLOD, Mobile, Navigation, VirtualTexture))
 class UVdbMaterialComponent : public UPrimitiveComponent
 {
 	GENERATED_UCLASS_BODY()
@@ -71,9 +71,6 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
 	bool ColoredTransmittance = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
-	bool CastShadows = false;
-
 	// Enable temporal noise (including sub-frame variation for movie render queue)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
 	bool TemporalNoise = true;
@@ -93,6 +90,10 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 	// Ambient contribution to be added to light scattering, usually needed to cheaply boost volume radiance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (UIMin = "0.0"))
 	float Ambient = 0.0;
+
+	// We only support opaque shadows, choose after which threshold Volume is considered opaque
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (ClampMin = "0.0001", UIMin = "0.0001"))
+	float ShadowThreshold = 0.7;
 
 	// Backward or forward scattering direction (aka directional bias).
 	// The default value of zero gives isotropic scattering so that light is scattered evenly in all directions. 

@@ -23,7 +23,7 @@
 class IInterface_StreamableVolumetricAsset;
 
 // Handles frame by frame animation of NanoVDB assets of the linked VdbAssetComponent
-UCLASS(Blueprintable, ClassGroup = Rendering, hideCategories = (Activation, Collision, Cooking, HLOD, Navigation, Mobility, Object, Physics, VirtualTexture), meta = (BlueprintSpawnableComponent))
+UCLASS(Blueprintable, ClassGroup = Rendering, HideCategories = (Activation, Collision, Cooking, HLOD, Navigation, Mobility, Object, Physics, VirtualTexture), meta = (BlueprintSpawnableComponent))
 class VOLUMERUNTIME_API UVdbSequenceComponent : public UActorComponent, public IInterface_StreamableVolumetricAssetOwner
 {
 	GENERATED_UCLASS_BODY()

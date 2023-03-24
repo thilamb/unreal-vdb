@@ -34,9 +34,6 @@ UVdbMaterialComponent::UVdbMaterialComponent(const FObjectInitializer& ObjectIni
 
 	static ConstructorHelpers::FObjectFinder<UTextureRenderTarget2D> DefaultRenderTarget(TEXT("TextureRenderTarget2D'/SparseVolumetrics/Misc/RT_VdbMatRenderTarget.RT_VdbMatRenderTarget'"));
 	RenderTarget = DefaultRenderTarget.Object;
-
-	bCastDynamicShadow = true;
-	bCastStaticShadow = false;
 }
 
 UVdbMaterialComponent::~UVdbMaterialComponent() {}

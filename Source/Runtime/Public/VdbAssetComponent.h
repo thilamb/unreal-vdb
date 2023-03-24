@@ -27,7 +27,7 @@ class UVdbVolumeBase;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVdbChanged, int32, FrameIndex);
 
 // Can contain several grids of the same OpenVDB/NanoVDB file
-UCLASS(Blueprintable, ClassGroup = Rendering, hideCategories = (Activation, Collision, Cooking, HLOD, Navigation, VirtualTexture), meta = (BlueprintSpawnableComponent))
+UCLASS(Blueprintable, ClassGroup = Rendering, HideCategories = (Activation, Collision, Cooking, HLOD, Navigation, VirtualTexture), meta = (BlueprintSpawnableComponent))
 class UVdbAssetComponent : public UActorComponent
 {
 	GENERATED_UCLASS_BODY()
