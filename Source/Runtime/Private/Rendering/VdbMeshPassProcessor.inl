@@ -259,7 +259,6 @@ public:
 		const FSceneView* InView,
 		FMeshPassDrawListContext* InDrawListContext,
 		bool IsLevelSet, bool IsTranslucentLevelSet,
-		bool DepthPass,
 		bool ImprovedSkylight,
 		bool TrilinearSampling,
 		bool WriteDepth,
@@ -269,7 +268,6 @@ public:
 		, VdbShaderElementData(ShaderElementData)
 		, bLevelSet(IsLevelSet)
 		, bTranslucentLevelSet(IsTranslucentLevelSet)
-		, bDepthPass(DepthPass)
 		, bImprovedSkylight(ImprovedSkylight)
 		, bTrilinearSampling(TrilinearSampling)
 		, bTemperatureVdb(UseTempVdb)
@@ -278,10 +276,7 @@ public:
 		if (bLevelSet && !bTranslucentLevelSet)
 		{
 			PassDrawRenderState.SetBlendState(TStaticBlendState<>::GetRHI());
-			if (bDepthPass)
-				PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<true, CF_DepthFartherOrEqual>::GetRHI());
-			else
-				PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<true, CF_DepthNearOrEqual>::GetRHI());
+			PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<true, CF_DepthNearOrEqual>::GetRHI());
 		}
 		else
 		{
@@ -292,10 +287,7 @@ public:
 			}
 			else
 			{
-				if (bDepthPass)
-					PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<true, CF_DepthFartherOrEqual>::GetRHI());
-				else
-					PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<false, CF_DepthNearOrEqual>::GetRHI());
+				PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<false, CF_DepthNearOrEqual>::GetRHI());
 			}
 
 		}
@@ -330,61 +322,51 @@ public:
 
 #define PROCESS_SHADER(shader) { Process<FVdbShaderVS, ##shader>(MeshBatch, BatchElementMask, PrimitiveSceneProxy, *MaterialRenderProxy, *Material, StaticMeshId, MeshFillMode, MeshCullMode); }
 
-			//if (bDepthPass)
-			//{
-			//	if (bLevelSet)
-			//		PROCESS_SHADER(FVdbShaderPS_LevelSet_Depth)
-			//	else
-			//		PROCESS_SHADER(FVdbShaderPS_FogVolume_Depth)
-			//}
-			//else
+			if (bLevelSet)
 			{
-				if (bLevelSet)
-				{
-					if (bTranslucentLevelSet && bImprovedSkylight)
-						PROCESS_SHADER(FVdbShaderPS_LevelSet_Translucent_EnvLight)
-					else if (bTranslucentLevelSet)
-						PROCESS_SHADER(FVdbShaderPS_LevelSet_Translucent)
-					else
-						PROCESS_SHADER(FVdbShaderPS_LevelSet)
-				}
+				if (bTranslucentLevelSet && bImprovedSkylight)
+					PROCESS_SHADER(FVdbShaderPS_LevelSet_Translucent_EnvLight)
+				else if (bTranslucentLevelSet)
+					PROCESS_SHADER(FVdbShaderPS_LevelSet_Translucent)
 				else
-				{
-					// combination of 4 params: 2^4 = 16 different cases
-					// TODO: this is getting ridiculous, find better solution
-					if (!bTemperatureVdb && !bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume)
-					else if (!bTemperatureVdb && !bColorVdb && !bImprovedSkylight && bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Trilinear)
-					else if (!bTemperatureVdb && !bColorVdb && bImprovedSkylight && !bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_EnvLight)
-					else if (!bTemperatureVdb && !bColorVdb && bImprovedSkylight && bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_EnvLight_Trilinear)
-					else if (!bTemperatureVdb && bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Color)
-					else if (!bTemperatureVdb && bColorVdb && !bImprovedSkylight && bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_Trilinear)
-					else if (!bTemperatureVdb && bColorVdb && bImprovedSkylight && !bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_EnvLight)
-					else if (!bTemperatureVdb && bColorVdb && bImprovedSkylight && bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_EnvLight_Trilinear)
-					else if (bTemperatureVdb && !bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody)
-					else if (bTemperatureVdb && !bColorVdb && !bImprovedSkylight && bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Trilinear)
-					else if (bTemperatureVdb && !bColorVdb && bImprovedSkylight && !bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_EnvLight)
-					else if (bTemperatureVdb && !bColorVdb && bImprovedSkylight && bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_EnvLight_Trilinear)
-					else if (bTemperatureVdb && bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color)
-					else if (bTemperatureVdb && bColorVdb && !bImprovedSkylight && bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_Trilinear)
-					else if (bTemperatureVdb && bColorVdb && bImprovedSkylight && !bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight)
-					else if (bTemperatureVdb && bColorVdb && bImprovedSkylight && bTrilinearSampling)
-						PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear)
-				}
+					PROCESS_SHADER(FVdbShaderPS_LevelSet)
+			}
+			else
+			{
+				// combination of 4 params: 2^4 = 16 different cases
+				// TODO: this is getting ridiculous, find better solution
+				if (!bTemperatureVdb && !bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume)
+				else if (!bTemperatureVdb && !bColorVdb && !bImprovedSkylight && bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Trilinear)
+				else if (!bTemperatureVdb && !bColorVdb && bImprovedSkylight && !bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_EnvLight)
+				else if (!bTemperatureVdb && !bColorVdb && bImprovedSkylight && bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_EnvLight_Trilinear)
+				else if (!bTemperatureVdb && bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color)
+				else if (!bTemperatureVdb && bColorVdb && !bImprovedSkylight && bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_Trilinear)
+				else if (!bTemperatureVdb && bColorVdb && bImprovedSkylight && !bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_EnvLight)
+				else if (!bTemperatureVdb && bColorVdb && bImprovedSkylight && bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_EnvLight_Trilinear)
+				else if (bTemperatureVdb && !bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody)
+				else if (bTemperatureVdb && !bColorVdb && !bImprovedSkylight && bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Trilinear)
+				else if (bTemperatureVdb && !bColorVdb && bImprovedSkylight && !bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_EnvLight)
+				else if (bTemperatureVdb && !bColorVdb && bImprovedSkylight && bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_EnvLight_Trilinear)
+				else if (bTemperatureVdb && bColorVdb && !bImprovedSkylight && !bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color)
+				else if (bTemperatureVdb && bColorVdb && !bImprovedSkylight && bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_Trilinear)
+				else if (bTemperatureVdb && bColorVdb && bImprovedSkylight && !bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight)
+				else if (bTemperatureVdb && bColorVdb && bImprovedSkylight && bTrilinearSampling)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear)
 			}
 		}
 	}
@@ -401,11 +383,7 @@ private:
 	{
 		FMaterialShaderTypes ShaderTypes;
 		ShaderTypes.AddShaderType<VertexShaderType>();
-
-		//if (!bDepthPass)
-		//{
-			ShaderTypes.AddShaderType<PixelShaderType>();
-		//}
+		ShaderTypes.AddShaderType<PixelShaderType>();
 
 		FMaterialShaders Shaders;
 		if (!Material.TryGetShaders(ShaderTypes, VertexFactoryType, Shaders))
@@ -416,7 +394,6 @@ private:
 		Shaders.TryGetVertexShader(VertexShader);
 		Shaders.TryGetPixelShader(PixelShader);
 
-		//return VertexShader.IsValid() && (bDepthPass || PixelShader.IsValid());
 		return VertexShader.IsValid() && PixelShader.IsValid();
 	}
 
@@ -465,7 +442,6 @@ private:
 	FVdbElementData VdbShaderElementData;
 	bool bLevelSet;
 	bool bTranslucentLevelSet;
-	bool bDepthPass;
 	bool bImprovedSkylight;
 	bool bTrilinearSampling;
 	bool bTemperatureVdb;

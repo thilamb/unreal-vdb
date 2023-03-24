@@ -373,17 +373,11 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			return ViewMat.TransformPosition(LeftProxyCenter).Z > ViewMat.TransformPosition(RightProxyCenter).Z; // back to front
 		});
 
-	//const FViewInfo* ViewInfo = static_cast<const FViewInfo*>(View);
-	//const FSceneViewFamily* ViewFamily = View->Family;
-	//const FScene* Scene = (FScene*)ViewFamily->Scene;
-	//FLightSceneInfo* SimpleDirectional = Scene->SimpleDirectionalLight;
-
 	FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
 
 	if (!OpaqueProxies.IsEmpty())
 	{
 		SCOPE_CYCLE_COUNTER(STAT_VdbOpaque_RT);
-		//DrawVdbProxies(OpaqueProxies, false, VdbUniformBuffer, nullptr, nullptr);
 		for (const FVdbMaterialSceneProxy* Proxy : OpaqueProxies)
 		{
 			RenderLights(Proxy, false, Parameters, nullptr, nullptr);
@@ -406,6 +400,7 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			TexDesc.ClearValue = FClearValueBinding(FLinearColor::Transparent);
 			VdbCurrRenderTexture = GraphBuilder.CreateTexture(TexDesc, TEXT("VdbRenderTexture"));
 		}
+		AddClearRenderTargetPass(GraphBuilder, VdbCurrRenderTexture);
 
 		bool bWriteDepth = FVdbCVars::CVarVolumetricVdbWriteDepth.GetValueOnRenderThread();
 		FRDGTextureRef DepthTestTexture = nullptr;
@@ -418,9 +413,9 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 					TexCreate_DepthStencilTargetable | TexCreate_ShaderResource,
 					1),
 				TEXT("VdbMaterialDepth"));
+			AddClearDepthStencilPass(GraphBuilder, DepthTestTexture, ERenderTargetLoadAction::EClear, ERenderTargetLoadAction::ENoAction);
 		}
 
-		//DrawVdbProxies(TranslucentProxies, true, VdbUniformBuffer, VdbCurrRenderTexture, DepthTestTexture);
 		for (const FVdbMaterialSceneProxy* Proxy : TranslucentProxies)
 		{
 			RenderLights(Proxy, true, Parameters, VdbCurrRenderTexture, DepthTestTexture);
@@ -626,12 +621,11 @@ void FVdbMaterialRendering::RenderLight(
 	bool bWriteDepth = DepthRenderTexture != nullptr;
 	if (RenderTexture)
 	{
-		PassParameters->RenderTargets[0] = FRenderTargetBinding(RenderTexture, ERenderTargetLoadAction::EClear);
-		// Don't bind depth buffer, we will read it in Pixel Shader instead
+		PassParameters->RenderTargets[0] = FRenderTargetBinding(RenderTexture, ERenderTargetLoadAction::ELoad);
 		if (bWriteDepth)
 		{
 			PassParameters->RenderTargets.DepthStencil =
-				FDepthStencilBinding(DepthRenderTexture, ERenderTargetLoadAction::EClear, FExclusiveDepthStencil::DepthWrite_StencilNop);
+				FDepthStencilBinding(DepthRenderTexture, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthWrite_StencilNop);
 		}
 	}
 	else
@@ -679,7 +673,6 @@ void FVdbMaterialRendering::RenderLight(
 						&InView,
 						DynamicMeshPassContext,
 						Proxy->IsLevelSet(), Proxy->IsTranslucentLevelSet(),
-						false,
 						Proxy->UseImprovedSkylight(),
 						Proxy->UseTrilinearSampling() || FVdbCVars::CVarVolumetricVdbTrilinear.GetValueOnRenderThread(),
 						bWriteDepth,
