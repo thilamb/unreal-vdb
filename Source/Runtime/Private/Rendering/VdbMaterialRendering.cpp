@@ -232,7 +232,7 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 	const FSceneView* View = static_cast<const FSceneView*>(Parameters.ShadowDepthView);
 	const FMatrix& ViewMat = View->ShadowViewMatrices.GetViewMatrix();
 
-	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return !Proxy->IsTranslucent()/* && Proxy->IsVisible(View)*/; });
+	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return !Proxy->IsTranslucent() && Proxy->IsVisible(View); });
 	OpaqueProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
 		{
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
@@ -240,7 +240,7 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 			return ViewMat.TransformPosition(LeftProxyCenter).Z < ViewMat.TransformPosition(RightProxyCenter).Z; // front to back
 		});
 
-	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return Proxy->IsTranslucent()/* && Proxy->IsVisible(View)*/; });
+	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return Proxy->IsTranslucent() && Proxy->IsVisible(View); });
 	TranslucentProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
 		{
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;

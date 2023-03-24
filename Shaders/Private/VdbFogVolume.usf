@@ -119,7 +119,7 @@ float4 RaymarchFogVolume(
 
 	FPixelMaterialInputs PixelMaterialInputs = (FPixelMaterialInputs)0;
 	
-	float FirstIntersectionS = 100000000000000000000000000000000000000000000000.0; // absurdly large value
+	float FirstIntersectionS = POSITIVE_INFINITY;
 
 	LOOP for (uint iStep = 0; iStep < NumSteps; ++iStep)
 	{
@@ -181,12 +181,13 @@ float4 RaymarchFogVolume(
 
 		// Only support single directional lighting.
 		{
+			float FirstIntersectionS = 0.0;
 			float3 ShadowTransmittance = GetLightTransmittance(
 				iPos, LightDir,
 				DensitySampler,
 				bbox_min, bbox_max,
-				SigmaT, SHADOW_STEP_SIZE_MULT,
-				LocalToWorld, RandSequence, MaterialParameters);
+				SHADOW_STEP_SIZE_MULT,
+				LocalToWorld, VdbParams.Threshold, RandSequence, FirstIntersectionS, MaterialParameters);
 			if (!COLORED_TRANSMITTANCE)
 			{
 				ShadowTransmittance = Average(ShadowTransmittance);
@@ -198,14 +199,15 @@ float4 RaymarchFogVolume(
 	#if NICER_BUT_EXPENSIVE_ENVLIGHT
 		{
 			// Random sample in entire sphere direction to capture Ambient environment
+			float FirstIntersectionS = 0.0;
 			float2 rnd = RandomSequence_GenerateSample2D(RandSequence);
 			float3 ShadowDirection = SampleHenyeyGreenstein(0.0, rnd.x, rnd.y);
 			float3 ShadowTransmittance = GetLightTransmittance(
 				iPos, ShadowDirection,
 				DensitySampler, 
 				bbox_min, bbox_max,
-				SigmaT, 2.0 * SHADOW_STEP_SIZE_MULT,
-				LocalToWorld, RandSequence, MaterialParameters);
+				2.0 * SHADOW_STEP_SIZE_MULT,
+				LocalToWorld, VdbParams.Threshold, RandSequence, FirstIntersectionS, MaterialParameters);
 			if (!COLORED_TRANSMITTANCE)
 			{
 				ShadowTransmittance = Average(ShadowTransmittance);

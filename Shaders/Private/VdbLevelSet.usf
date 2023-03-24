@@ -150,12 +150,13 @@ float4 RaymarchLevelSet(
 #if !MATERIAL_SHADINGMODEL_UNLIT
 		// Only support single directional lighting.
 		{
+			float FirstIntersectionS = 0.0;
 			float3 LightTransmittance = GetLightTransmittance(
 				iPos, LightDir,
 				VdbSampler,
 				bbox_min, bbox_max,
-				SigmaT, SHADOW_STEP_SIZE_MULT,
-				LocalToWorld, RandSequence, MaterialParameters);
+				SHADOW_STEP_SIZE_MULT,
+				LocalToWorld, VdbParams.Threshold,  RandSequence, FirstIntersectionS, MaterialParameters);
 			if (!COLORED_TRANSMITTANCE)
 			{
 				LightTransmittance = Average(LightTransmittance);
@@ -167,14 +168,15 @@ float4 RaymarchLevelSet(
 		#if NICER_BUT_EXPENSIVE_ENVLIGHT
 			{
 				// Random sample in entire sphere direction to capture Ambient environment
+				float FirstIntersectionS = 0.0;
 				float2 rnd = RandomSequence_GenerateSample2D(RandSequence);
 				float3 ShadowDirection = SampleHenyeyGreenstein(0.0, rnd.x, rnd.y);
 				float3 ShadowTransmittance = GetLightTransmittance(
 					iPos, ShadowDirection,
 					VdbSampler,
 					bbox_min, bbox_max,
-					SigmaT, 2.0 * SHADOW_STEP_SIZE_MULT,
-					LocalToWorld, RandSequence, MaterialParameters);
+					2.0 * SHADOW_STEP_SIZE_MULT,
+					LocalToWorld, VdbParams.Threshold, RandSequence, FirstIntersectionS, MaterialParameters);
 				if (!COLORED_TRANSMITTANCE)
 				{
 					ShadowTransmittance = Average(ShadowTransmittance);

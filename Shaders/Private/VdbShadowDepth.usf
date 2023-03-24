@@ -54,6 +54,7 @@ Texture2D BlackbodyColor; // curve atlas
 #define TEMPORAL_NOISE bool(CustomIntData0.w) 
 #define CURVE_INDEX CustomIntData1.x
 #define CURVE_HEIGHT CustomIntData1.y
+#define TRANSLUCENT_LEVEL_SET CustomIntData1.z
 #define LOCAL_STEP_SIZE CustomFloatData0.x
 #define SHADOW_STEP_SIZE_MULT CustomFloatData0.y
 #define VOXEL_SIZE CustomFloatData0.z
@@ -65,6 +66,7 @@ Texture2D BlackbodyColor; // curve atlas
 #define DENSITY_MULT CustomFloatData2.x
 #define VOLUME_PADDING CustomFloatData2.y
 #define AMBIENT CustomFloatData2.z
+#define SHADOW_THRESHOLD CustomFloatData2.w
 
 #define SAMPLING_FLOAT ReadValue
 #define SAMPLING_VECTOR ReadValueVec3f
@@ -138,7 +140,7 @@ void SetShadowDepthOutputs(
 #endif
 }
 
-VdbRay PrepareShadowRayFromPixel(pnanovdb_buf_t grid_buf, pnanovdb_grid_handle_t grid, float4 SvPosition, float4x4 WorldToLocal)
+VdbRay PrepareShadowRayFromPixel(pnanovdb_buf_t grid_buf, pnanovdb_grid_handle_t grid, float4 SvPosition, float4x4 WorldToLocal, bool Forward)
 {
 	float4 ClipPosition = SvPositionToScreenPosition(SvPosition) / SvPosition.w; // NDC to Clip
 
@@ -157,8 +159,16 @@ VdbRay PrepareShadowRayFromPixel(pnanovdb_buf_t grid_buf, pnanovdb_grid_handle_t
 	float Dist = length(End - Origin);
 
 	VdbRay Ray;
-	Ray.Origin = Origin;
-	Ray.Direction = (End - Origin) / Dist;
+	if (Forward)
+	{
+		Ray.Origin = Origin;
+		Ray.Direction = (End - Origin) / Dist;
+	}
+	else
+	{
+		Ray.Origin = End;
+		Ray.Direction = (Origin - End) / Dist;
+	}
 	Ray.TMin = 0.0001f;
 	Ray.TMax = POSITIVE_INFINITY;
 
@@ -272,91 +282,71 @@ bool RaymarchFogVolume(
 	VdbRay Ray,
 	float DeviceZ,
 	FMaterialPixelParameters MaterialParameters,
+	RandomSequence RandSequence,
 	float4x4 LocalToWorld,
 	float4x4 WorldToLocal,
 	float4 SvPosition,
 	out float3 FirstIntersection)
 {
-	// ------------------------------------------------------------------------
-	// Test against volume, and update Ray start/end to fit volume
+	float FirstIntersectionS = 0.0;
+	float3 Transmittance = 0.0;
+	pnanovdb_vec3_t iPos = 0.0;
 
-	if (!CheckBounds(Ray, bbox_min - VOLUME_PADDING, bbox_max + VOLUME_PADDING))
-		return false;
-
-	// ------------------------------------------------------------------------
-	// Raymarch with fixed steps
-
-	float StepSize = LOCAL_STEP_SIZE / VOXEL_SIZE; // Index space
-	float RaymarchDistance = Ray.TMax - Ray.TMin; // Index space
-	const uint NumSteps = min(ceil(RaymarchDistance / StepSize), MAX_NUM_STEPS);
-	float StepWorldMeters = LOCAL_STEP_SIZE * CENTIMETER_TO_METER;
-
-	FPixelMaterialInputs PixelMaterialInputs = (FPixelMaterialInputs) 0;
-
-	LOOP
-	for (uint iStep = 0; iStep < NumSteps; ++iStep)
-	{
-		float s = Ray.TMin + (iStep + 0.5) * StepSize;
-		pnanovdb_vec3_t iPos = pnanovdb_hdda_ray_start(Ray.Origin, s, Ray.Direction);
-
-		// Update coordinates
-		float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
-		float3 TranslatedWorldPos = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
-
-		CalcMaterialParametersEx(
-			MaterialParameters, PixelMaterialInputs,
-			SvPosition, SvPositionToScreenPosition(SvPosition),
-			true,
-			TranslatedWorldPos, TranslatedWorldPos);
-
-		half3 Displacement = SampleDisplacement(PixelMaterialInputs);
-		float2 DensityModifications = SampleDensityModifications(PixelMaterialInputs);
-
-		float Density = SAMPLING_FLOAT(iPos - Displacement, DensitySampler.GridBuffer, DensitySampler.GridType, DensitySampler.Accessor);
 #if LEVEL_SET
-		Density = Density < 0.0 ? 1.0 : 0.0;
-#else
-		Density = UpdateDensity(Density, DENSITY_MULT, DensityModifications);
-#endif
-
-		if (Density == 0.0)
-			continue;
-
-		//FirstIntersectionS = min(FirstIntersectionS, s);
-		FirstIntersection = TranslatedWorldPos;
-		return true;
+	if (!TRANSLUCENT_LEVEL_SET)
+	{
+		ZeroCrossingHit HitResults;
+		if (!GetNextIntersection(DensitySampler, Ray, HitResults))
+		{
+			Transmittance = 1.0;
+		}
+		iPos = pnanovdb_coord_to_vec3(HitResults.ijk_hit); // index/vdb space hit position
 	}
-	
-	return false;
+	else
+#endif
+	{
+		Transmittance = GetLightTransmittance(
+			Ray.Origin, Ray.Direction,
+			DensitySampler,
+			bbox_min, bbox_max,
+			2.0 * SHADOW_STEP_SIZE_MULT,
+			LocalToWorld, SHADOW_THRESHOLD, RandSequence, FirstIntersectionS, MaterialParameters);
+		Transmittance = Average(Transmittance);
+		iPos = pnanovdb_hdda_ray_start(Ray.Origin, FirstIntersectionS, Ray.Direction);
+	}
+
+	float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
+	FirstIntersection = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
+
+	return all(Transmittance < SHADOW_THRESHOLD);
 }
 
 
 bool GetFurtherVdbValue(FShadowDepthVSToPS Inputs, float4 SvPosition, out float3 LastIntersection)
 {
+	VdbSampler DensitySampler = InitVdbSampler(DensityVdbBuffer);
+
 	FMaterialPixelParameters MaterialParameters = GetMaterialPixelParameters(Inputs.FactoryInterpolants, SvPosition);
 
 	uint PrimId = VertexFactoryGetPrimitiveId(Inputs.FactoryInterpolants);
 	float4x4 WorldToLocal = LWCHackToFloat(GetPrimitiveData(PrimId).WorldToLocal);
 	float4x4 LocalToWorld = LWCHackToFloat(GetPrimitiveData(PrimId).LocalToWorld);
 
-	float DeviceZ = 0.0; //VdbParams.SceneDepthTexture.Load(int3(SvPosition.xy, 0)).x; // backbuffer depth
-
-	// ------------------------------------------------------------------------
-	// Prepare NanoVDB
-	
-	VdbSampler DensitySampler = InitVdbSampler(DensityVdbBuffer);
-	
 	// Global values (could be computed on CPU, and passed to shader instead)
 	pnanovdb_vec3_t bbox_min = pnanovdb_coord_to_vec3(pnanovdb_root_get_bbox_min(DensitySampler.GridBuffer, DensitySampler.Root));
 	pnanovdb_vec3_t bbox_max = pnanovdb_coord_to_vec3(pnanovdb_root_get_bbox_max(DensitySampler.GridBuffer, DensitySampler.Root));
 
+	float DeviceZ = 0.0; // let depth write test do its job
 	LastIntersection = 0.0; // Translated world space
+
+	RandomSequence RandSequence;
+	RandomSequence_Initialize(RandSequence, SvPosition.xy, 0, ResolvedView.StateFrameIndex + ResolvedView.Random, 1);
 	
-	VdbRay Ray = PrepareShadowRayFromPixel(DensitySampler.GridBuffer, DensitySampler.Grid, SvPosition, WorldToLocal);
+	VdbRay Ray = PrepareShadowRayFromPixel(DensitySampler.GridBuffer, DensitySampler.Grid, SvPosition, WorldToLocal, false);
 
 	return RaymarchFogVolume(	DensitySampler,
 								bbox_min, bbox_max, Ray, DeviceZ,
-								MaterialParameters,
+								MaterialParameters, RandSequence,
 								LocalToWorld, WorldToLocal, SvPosition, LastIntersection);
 }
 
