@@ -74,6 +74,8 @@ struct VdbSampler
 	pnanovdb_readaccessor_t Accessor;
 	pnanovdb_uint32_t GridType;
 	pnanovdb_root_handle_t Root;
+	float3 MinBounds;
+	float3 MaxBounds;
 };
 
 VdbSampler InitVdbSampler(pnanovdb_buf_t buf)
@@ -91,6 +93,9 @@ VdbSampler InitVdbSampler(pnanovdb_buf_t buf)
 	pnanovdb_readaccessor_init(Sampler.Accessor, Sampler.Root);
 
 	Sampler.GridType = pnanovdb_grid_get_grid_type(Sampler.GridBuffer, Sampler.Grid);
+
+	Sampler.MinBounds = pnanovdb_coord_to_vec3(pnanovdb_root_get_bbox_min(Sampler.GridBuffer, Sampler.Root));
+	Sampler.MaxBounds = pnanovdb_coord_to_vec3(pnanovdb_root_get_bbox_max(Sampler.GridBuffer, Sampler.Root));
 
 	return Sampler;
 }
@@ -254,7 +259,9 @@ Segment getRayFromPixelCoord(uint2 ScreenPosition, uint2 ScreenDimensions, float
 	float2 ScreenPositionNorm = (ScreenPosition + 0.5f + Jitter) / float2(ScreenDimensions);
 	float2 ClipPosition = (ScreenPositionNorm - View.ScreenPositionScaleBias.wz) / View.ScreenPositionScaleBias.xy;
 
+#if HAS_INVERTED_Z_BUFFER
 	DeviceZ = max(DeviceZ, 0.000000000000001); // either no Z value, or too far to even consider
+#endif
 	float4 Near = mul(float4(ClipPosition, 1, 1), View.ClipToTranslatedWorld); // near (world space)
 	float4 Far = mul(float4(ClipPosition, DeviceZ, 1), View.ClipToTranslatedWorld); // scene gbuffer (world space)
 

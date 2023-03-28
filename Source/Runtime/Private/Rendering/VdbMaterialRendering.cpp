@@ -42,37 +42,37 @@ DECLARE_GPU_STAT_NAMED(StatVdbShadowDepthMaterial, TEXT("Vdb Shadow Depth Materi
 
 FShadowDepthType CSMVdbShadowDepthType(true, false);
 
-void SetupDummyForwardLightUniformParameters(FRDGBuilder& GraphBuilder, FForwardLightData& ForwardLightData)
-{
-	const FRDGSystemTextures& SystemTextures = FRDGSystemTextures::Get(GraphBuilder);
-
-	ForwardLightData.DirectionalLightShadowmapAtlas = SystemTextures.Black;
-	ForwardLightData.DirectionalLightStaticShadowmap = GBlackTexture->TextureRHI;
-
-	FRDGBufferRef ForwardLocalLightBuffer = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(FVector4f));
-	ForwardLightData.ForwardLocalLightBuffer = GraphBuilder.CreateSRV(ForwardLocalLightBuffer, PF_A32B32G32R32F);
-
-	FRDGBufferRef NumCulledLightsGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint32));
-	ForwardLightData.NumCulledLightsGrid = GraphBuilder.CreateSRV(NumCulledLightsGrid, PF_R32_UINT);
-
-	if (RHISupportsBufferLoadTypeConversion(GMaxRHIShaderPlatform))
-	{
-		FRDGBufferRef CulledLightDataGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint16));
-		ForwardLightData.CulledLightDataGrid = GraphBuilder.CreateSRV(CulledLightDataGrid, PF_R16_UINT);
-	}
-	else
-	{
-		FRDGBufferRef CulledLightDataGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint32));
-		ForwardLightData.CulledLightDataGrid = GraphBuilder.CreateSRV(CulledLightDataGrid, PF_R32_UINT);
-	}
-}
-
-TRDGUniformBufferRef<FForwardLightData> CreateDummyForwardLightUniformBuffer(FRDGBuilder& GraphBuilder)
-{
-	FForwardLightData* ForwardLightData = GraphBuilder.AllocParameters<FForwardLightData>();
-	SetupDummyForwardLightUniformParameters(GraphBuilder, *ForwardLightData);
-	return GraphBuilder.CreateUniformBuffer(ForwardLightData);
-}
+//void SetupDummyForwardLightVdbParameters(FRDGBuilder& GraphBuilder, FForwardLightData& ForwardLightData)
+//{
+//	const FRDGSystemTextures& SystemTextures = FRDGSystemTextures::Get(GraphBuilder);
+//
+//	ForwardLightData.DirectionalLightShadowmapAtlas = SystemTextures.Black;
+//	ForwardLightData.DirectionalLightStaticShadowmap = GBlackTexture->TextureRHI;
+//
+//	FRDGBufferRef ForwardLocalLightBuffer = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(FVector4f));
+//	ForwardLightData.ForwardLocalLightBuffer = GraphBuilder.CreateSRV(ForwardLocalLightBuffer, PF_A32B32G32R32F);
+//
+//	FRDGBufferRef NumCulledLightsGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint32));
+//	ForwardLightData.NumCulledLightsGrid = GraphBuilder.CreateSRV(NumCulledLightsGrid, PF_R32_UINT);
+//
+//	if (RHISupportsBufferLoadTypeConversion(GMaxRHIShaderPlatform))
+//	{
+//		FRDGBufferRef CulledLightDataGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint16));
+//		ForwardLightData.CulledLightDataGrid = GraphBuilder.CreateSRV(CulledLightDataGrid, PF_R16_UINT);
+//	}
+//	else
+//	{
+//		FRDGBufferRef CulledLightDataGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint32));
+//		ForwardLightData.CulledLightDataGrid = GraphBuilder.CreateSRV(CulledLightDataGrid, PF_R32_UINT);
+//	}
+//}
+//
+//TRDGUniformBufferRef<FForwardLightData> CreateDummyForwardLightUniformBuffer(FRDGBuilder& GraphBuilder)
+//{
+//	FForwardLightData* ForwardLightData = GraphBuilder.AllocParameters<FForwardLightData>();
+//	SetupDummyForwardLightVdbParameters(GraphBuilder, *ForwardLightData);
+//	return GraphBuilder.CreateUniformBuffer(ForwardLightData);
+//}
 
 //-----------------------------------------------------------------------------
 //--- FVdbMaterialRendering
@@ -326,10 +326,10 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 	};
 
 	FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
-	FVdbDepthShaderParams* UniformParameters = GraphBuilder.AllocParameters<FVdbDepthShaderParams>();
-	UniformParameters->ShadowClipToTranslatedWorld = Parameters.ProjectedShadowInfo->TranslatedWorldToClipOuterMatrix.Inverse();
-	UniformParameters->ShadowPreViewTranslation = FVector3f(Parameters.ProjectedShadowInfo->PreShadowTranslation);
-	TRDGUniformBufferRef<FVdbDepthShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(UniformParameters);
+	FVdbDepthShaderParams* VdbParameters = GraphBuilder.AllocParameters<FVdbDepthShaderParams>();
+	VdbParameters->ShadowClipToTranslatedWorld = Parameters.ProjectedShadowInfo->TranslatedWorldToClipOuterMatrix.Inverse();
+	VdbParameters->ShadowPreViewTranslation = FVector3f(Parameters.ProjectedShadowInfo->PreShadowTranslation);
+	TRDGUniformBufferRef<FVdbDepthShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(VdbParameters);
 	
 	if (!OpaqueProxies.IsEmpty())
 	{
@@ -506,12 +506,15 @@ void FVdbMaterialRendering::RenderLights(
 			RenderTexture,
 			DepthRenderTexture
 		);
+
+		// Disable any depth test / write after first lighting pass
+		DepthRenderTexture = nullptr;
 	}
 }
 
 void SetupRenderPassParameters(
 	FRDGBuilder& GraphBuilder,
-	FVdbShaderParametersPS* PassParameters,
+	FVdbShaderPS::FParameters* PassParameters,
 	// Light data
 	bool ApplyEmissionAndTransmittance,
 	bool ApplyDirectLighting,
@@ -524,62 +527,59 @@ void SetupRenderPassParameters(
 	const FViewInfo* ViewInfo
 )
 {
-	FVdbShaderParams* UniformParameters = GraphBuilder.AllocParameters<FVdbShaderParams>();
+	FVdbShaderParams* VdbParameters = GraphBuilder.AllocParameters<FVdbShaderParams>();
 
 	// Scene data
-	UniformParameters->SceneDepthTexture = Parameters.DepthTexture;
-	UniformParameters->LinearTexSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+	VdbParameters->SceneDepthTexture = Parameters.DepthTexture;
+	VdbParameters->LinearTexSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 	// Vdb data
-	UniformParameters->Threshold = FMath::Max(0.0, FVdbCVars::CVarVolumetricVdbThreshold.GetValueOnAnyThread());
+	VdbParameters->Threshold = FMath::Max(0.0, FVdbCVars::CVarVolumetricVdbThreshold.GetValueOnAnyThread());
 
 	// Light data
+	VdbParameters->bApplyEmissionAndTransmittance = ApplyEmissionAndTransmittance;
+	VdbParameters->bApplyDirectLighting = ApplyDirectLighting;
+	VdbParameters->bApplyShadowTransmittance = ApplyShadowTransmittance;
+	VdbParameters->LightType = LightType;
+
 	FDeferredLightUniformStruct DeferredLightUniform;
-	UniformParameters->bApplyEmissionAndTransmittance = ApplyEmissionAndTransmittance;
-	UniformParameters->bApplyDirectLighting = ApplyDirectLighting;
-	UniformParameters->bApplyShadowTransmittance = ApplyShadowTransmittance;
-	UniformParameters->LightType = LightType;
 	if (ApplyDirectLighting && (LightSceneInfo != nullptr))
 	{
 		DeferredLightUniform = GetDeferredLightParameters(*ViewInfo, *LightSceneInfo);
-		UniformParameters->VolumetricScatteringIntensity = LightSceneInfo->Proxy->GetVolumetricScatteringIntensity();
 	}
-	PassParameters->DeferredLight = CreateUniformBufferImmediate(DeferredLightUniform, UniformBuffer_SingleDraw);
+	VdbParameters->DeferredLight = DeferredLightUniform;
 
 	// Shadow data
-	UniformParameters->ShadowStepSize = 8.0;// todo make a variable
-	UniformParameters->ForwardLightData = *ViewInfo->ForwardLightingResources.ForwardLightData;
+	VdbParameters->ForwardLightData = *ViewInfo->ForwardLightingResources.ForwardLightData;
 	if (VisibleLightInfo != nullptr)
 	{
 		const FProjectedShadowInfo* ProjectedShadowInfo = GetShadowForInjectionIntoVolumetricFog(*VisibleLightInfo);
 		bool bDynamicallyShadowed = ProjectedShadowInfo != NULL;
 		if (bDynamicallyShadowed)
 		{
-			GetVolumeShadowingShaderParameters(GraphBuilder, *ViewInfo, LightSceneInfo, ProjectedShadowInfo, PassParameters->VolumeShadowingShaderParameters);
+			GetVolumeShadowingShaderParameters(GraphBuilder, *ViewInfo, LightSceneInfo, ProjectedShadowInfo, VdbParameters->VolumeShadowingShaderParameters);
 		}
 		else
 		{
-			SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, PassParameters->VolumeShadowingShaderParameters);
+			SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters);
 		}
-		UniformParameters->VirtualShadowMapId = VisibleLightInfo->GetVirtualShadowMapId(ViewInfo);
+		VdbParameters->VirtualShadowMapId = VisibleLightInfo->GetVirtualShadowMapId(ViewInfo);
 	}
 	else
 	{
-		SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, PassParameters->VolumeShadowingShaderParameters);
+		SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters);
 	}
 	PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
 
 	// Indirect lighting data
-	auto* LumenUniforms = GraphBuilder.AllocParameters<FLumenTranslucencyLightingUniforms>();
-	LumenUniforms->Parameters = GetLumenTranslucencyLightingParameters(GraphBuilder, ViewInfo->LumenTranslucencyGIVolume, ViewInfo->LumenFrontLayerTranslucency);
-	PassParameters->LumenGIVolumeStruct = GraphBuilder.CreateUniformBuffer(LumenUniforms);
+	//auto* LumenUniforms = GraphBuilder.AllocParameters<FLumenTranslucencyLightingUniforms>();
+	//LumenUniforms->Parameters = GetLumenTranslucencyLightingParameters(GraphBuilder, ViewInfo->LumenTranslucencyGIVolume, ViewInfo->LumenFrontLayerTranslucency);
+	//PassParameters->LumenGIVolumeStruct = GraphBuilder.CreateUniformBuffer(LumenUniforms);
 
 	// Pass params
-	PassParameters->DeferredLight = CreateUniformBufferImmediate(DeferredLightUniform, UniformBuffer_SingleDraw);
 	PassParameters->View = ViewInfo->ViewUniformBuffer;
-	PassParameters->InstanceCulling = FInstanceCullingContext::CreateDummyInstanceCullingUniformBuffer(GraphBuilder);
 
 	// Finalize VdbUniformBuffer
-	TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(UniformParameters);
+	TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(VdbParameters);
 	PassParameters->VdbUniformBuffer = VdbUniformBuffer;
 }
 
@@ -604,7 +604,7 @@ void FVdbMaterialRendering::RenderLight(
 
 	FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
 
-	FVdbShaderParametersPS* PassParameters = GraphBuilder.AllocParameters<FVdbShaderParametersPS>();
+	FVdbShaderPS::FParameters* PassParameters = GraphBuilder.AllocParameters<FVdbShaderPS::FParameters>();
 	SetupRenderPassParameters(
 		GraphBuilder,
 		PassParameters, 
@@ -635,11 +635,23 @@ void FVdbMaterialRendering::RenderLight(
 			FDepthStencilBinding(Parameters.DepthTexture, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthWrite_StencilNop);
 	}
 
+
+	//FDeferredLightUniformStruct DeferredLightUniform;
+	////auto* DeferredLightStruct = GraphBuilder.AllocParameters<FDeferredLightUniformStruct>();
+	//if (LightSceneInfo)
+	//{
+	//	DeferredLightUniform = GetDeferredLightParameters(*ViewInfo, *LightSceneInfo);
+	//	//*DeferredLightStruct = GetDeferredLightParameters(*ViewInfo, *LightSceneInfo);
+	//}
+	//TUniformBufferRef<FDeferredLightUniformStruct> DeferredLight = CreateUniformBufferImmediate(DeferredLightUniform, UniformBuffer_SingleDraw);
+
+	//FVirtualShadowMapSamplingParameters VsmSamplingParams = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
+
 	GraphBuilder.AddPass(
 		Translucent ? RDG_EVENT_NAME("Vdb Translucent Rendering") : RDG_EVENT_NAME("Vdb Opaque Rendering"),
 		PassParameters,
 		ERDGPassFlags::Raster,
-		[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxy, bWriteDepth](FRHICommandListImmediate& RHICmdList)
+		[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxy, bWriteDepth/*, DeferredLight, VsmSamplingParams*/, FirstLight = ApplyEmissionAndTransmittance](FRHICommandListImmediate& RHICmdList)
 		{
 			SCOPED_DRAW_EVENT(RHICmdList, StatVdbMaterial);
 			SCOPED_GPU_STAT(RHICmdList, StatVdbMaterial);
@@ -661,6 +673,8 @@ void FVdbMaterialRendering::RenderLight(
 					ShaderElementData.DensityBufferSRV = Proxy->GetDensityRenderResource()->GetBufferSRV();
 					ShaderElementData.TemperatureBufferSRV = Proxy->GetTemperatureRenderResource() ? Proxy->GetTemperatureRenderResource()->GetBufferSRV() : nullptr;
 					ShaderElementData.ColorBufferSRV = Proxy->GetColorRenderResource() ? Proxy->GetColorRenderResource()->GetBufferSRV() : nullptr;
+					//ShaderElementData.DeferredUniformBuffer = DeferredLight;
+					//ShaderElementData.VirtualShadowMap = VsmSamplingParams.VirtualShadowMap->GetRHI();
 					if (!ShaderElementData.DensityBufferSRV)
 						return;
 
@@ -675,7 +689,7 @@ void FVdbMaterialRendering::RenderLight(
 						Proxy->IsLevelSet(), Proxy->IsTranslucentLevelSet(),
 						Proxy->UseImprovedSkylight(),
 						Proxy->UseTrilinearSampling() || FVdbCVars::CVarVolumetricVdbTrilinear.GetValueOnRenderThread(),
-						bWriteDepth,
+						bWriteDepth, FirstLight,
 						ShaderElementData.TemperatureBufferSRV != nullptr,
 						ShaderElementData.ColorBufferSRV != nullptr,
 						MoveTemp(ShaderElementData));

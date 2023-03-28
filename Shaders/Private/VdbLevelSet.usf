@@ -14,7 +14,6 @@
 
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
-#include "/Engine/Private/ForwardShadowingCommon.ush"
 #include "/Engine/Private/ReflectionEnvironmentShared.ush"
 #include "/Engine/Private/BRDF.ush"
 #include "/Engine/Generated/Material.ush"
@@ -48,11 +47,10 @@ StructuredBuffer<uint> DensityVdbBuffer;
 
 #include "/Plugin/VdbVolume/Private/VdbCommon.ush"
 #include "/Plugin/VdbVolume/Private/VdbMaterial.ush"
+#include "/Plugin/VdbVolume/Private/VdbRaymarchingUtils.ush"
 
 float4 RaymarchLevelSet(
 	VdbSampler VdbSampler,
-	pnanovdb_vec3_t bbox_min,
-	pnanovdb_vec3_t bbox_max,
 	VdbRay Ray,
 	float4x4 LocalToWorld,
 	float4x4 WorldToLocal,
@@ -63,7 +61,7 @@ float4 RaymarchLevelSet(
 	// ------------------------------------------------------------------------
 	// Test against volume, and update Ray start/end to fit volume
 
-	if (!CheckBounds(Ray, bbox_min - VOLUME_PADDING, bbox_max + VOLUME_PADDING))
+	if (!CheckBounds(Ray, VdbSampler.MinBounds - VOLUME_PADDING, VdbSampler.MaxBounds + VOLUME_PADDING))
 		return float4(0.0, 0.0, 0.0, 0.0);
 
 	// ------------------------------------------------------------------------
@@ -151,12 +149,11 @@ float4 RaymarchLevelSet(
 		// Only support single directional lighting.
 		{
 			float FirstIntersectionS = 0.0;
-			float3 LightTransmittance = GetLightTransmittance(
+			float3 LightTransmittance = GetTransmittance(
 				iPos, LightDir,
 				VdbSampler,
-				bbox_min, bbox_max,
 				SHADOW_STEP_SIZE_MULT,
-				LocalToWorld, VdbParams.Threshold,  RandSequence, FirstIntersectionS, MaterialParameters);
+				LocalToWorld, VdbParams.Threshold, RandSequence, FirstIntersectionS, MaterialParameters);
 			if (!COLORED_TRANSMITTANCE)
 			{
 				LightTransmittance = Average(LightTransmittance);
@@ -171,10 +168,9 @@ float4 RaymarchLevelSet(
 				float FirstIntersectionS = 0.0;
 				float2 rnd = RandomSequence_GenerateSample2D(RandSequence);
 				float3 ShadowDirection = SampleHenyeyGreenstein(0.0, rnd.x, rnd.y);
-				float3 ShadowTransmittance = GetLightTransmittance(
+				float3 ShadowTransmittance = GetTransmittance(
 					iPos, ShadowDirection,
 					VdbSampler,
-					bbox_min, bbox_max,
 					2.0 * SHADOW_STEP_SIZE_MULT,
 					LocalToWorld, VdbParams.Threshold, RandSequence, FirstIntersectionS, MaterialParameters);
 				if (!COLORED_TRANSMITTANCE)
@@ -321,10 +317,6 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 
 	FMaterialPixelParameters MaterialParameters = GetMaterialPixelParameters(FactoryInterpolants, SvPosition);
 
-	// Global values (could be computed on CPU, and passed to shader instead)
-	pnanovdb_vec3_t bbox_min = pnanovdb_coord_to_vec3(pnanovdb_root_get_bbox_min(VdbSampler.GridBuffer, VdbSampler.Root));
-	pnanovdb_vec3_t bbox_max = pnanovdb_coord_to_vec3(pnanovdb_root_get_bbox_max(VdbSampler.GridBuffer, VdbSampler.Root));
-
 	float DeviceZ = VdbParams.SceneDepthTexture.Load(int3(SvPosition.xy, 0)).x; // backbuffer depth
 
 	// ------------------------------------------------------------------------
@@ -350,8 +342,7 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 		VdbRay iRay = PrepareRayFromPixel(VdbSampler.GridBuffer, VdbSampler.Grid, SvPosition.xy, ResolvedView.BufferSizeAndInvSize.xy, Jitter, DeviceZ, WorldToLocal); // index/vdb space
 		
 		Radiance += RaymarchLevelSet(
-			VdbSampler, 
-			bbox_min, bbox_max, 
+			VdbSampler,
 			iRay,
 			LocalToWorld, WorldToLocal, 
 			SvPosition,

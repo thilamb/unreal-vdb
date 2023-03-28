@@ -262,6 +262,7 @@ public:
 		bool ImprovedSkylight,
 		bool TrilinearSampling,
 		bool WriteDepth,
+		bool FirstLight,
 		bool UseTempVdb, bool UseColorVdb,
 		FVdbElementData&& ShaderElementData)
 		: FMeshPassProcessor(Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
@@ -280,7 +281,17 @@ public:
 		}
 		else
 		{
-			PassDrawRenderState.SetBlendState(TStaticBlendState<CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_One, BF_InverseSourceAlpha>::GetRHI()); // premultiplied alpha blending
+			if (FirstLight)
+			{
+			    // premultiplied alpha blending
+				PassDrawRenderState.SetBlendState(TStaticBlendState<CW_RGBA, BO_Add, BF_One, BF_InverseSourceAlpha, BO_Add, BF_One, BF_InverseSourceAlpha>::GetRHI());
+			}
+			else
+			{
+			    // just add light contribution
+				PassDrawRenderState.SetBlendState(TStaticBlendState<CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_Zero, BF_One>::GetRHI());
+			}
+
 			if (WriteDepth)
 			{
 				PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<true, CF_DepthNearOrEqual>::GetRHI());

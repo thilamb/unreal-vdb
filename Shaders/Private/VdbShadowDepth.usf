@@ -58,7 +58,7 @@ Texture2D BlackbodyColor; // curve atlas
 #define LOCAL_STEP_SIZE CustomFloatData0.x
 #define SHADOW_STEP_SIZE_MULT CustomFloatData0.y
 #define VOXEL_SIZE CustomFloatData0.z
-#define JITTER_MULT CustomFloatData0.w
+#define JITTER_MULT 0.0 // force no jittering
 #define ANISOTROPY CustomFloatData1.x
 #define ALBEDO CustomFloatData1.y
 #define BLACKBODY_INTENSITY CustomFloatData1.z
@@ -79,7 +79,7 @@ Texture2D BlackbodyColor; // curve atlas
 #endif
 
 #include "/Plugin/VdbVolume/Private/VdbCommon.ush"
-#include "/Plugin/VdbVolume/Private/VdbMaterial.ush"
+#include "/Plugin/VdbVolume/Private/VdbRaymarchingUtils.ush"
 
 void SetShadowDepthOutputs(
 	float4x4 WorldToClipMatrix,
@@ -277,8 +277,6 @@ void MainVS(
 
 bool RaymarchFogVolume(
 	VdbSampler DensitySampler,
-	pnanovdb_vec3_t bbox_min,
-	pnanovdb_vec3_t bbox_max,
 	VdbRay Ray,
 	float DeviceZ,
 	FMaterialPixelParameters MaterialParameters,
@@ -305,10 +303,9 @@ bool RaymarchFogVolume(
 	else
 #endif
 	{
-		Transmittance = GetLightTransmittance(
+		Transmittance = GetTransmittance(
 			Ray.Origin, Ray.Direction,
 			DensitySampler,
-			bbox_min, bbox_max,
 			2.0 * SHADOW_STEP_SIZE_MULT,
 			LocalToWorld, SHADOW_THRESHOLD, RandSequence, FirstIntersectionS, MaterialParameters);
 		Transmittance = Average(Transmittance);
@@ -332,10 +329,6 @@ bool GetFurtherVdbValue(FShadowDepthVSToPS Inputs, float4 SvPosition, out float3
 	float4x4 WorldToLocal = LWCHackToFloat(GetPrimitiveData(PrimId).WorldToLocal);
 	float4x4 LocalToWorld = LWCHackToFloat(GetPrimitiveData(PrimId).LocalToWorld);
 
-	// Global values (could be computed on CPU, and passed to shader instead)
-	pnanovdb_vec3_t bbox_min = pnanovdb_coord_to_vec3(pnanovdb_root_get_bbox_min(DensitySampler.GridBuffer, DensitySampler.Root));
-	pnanovdb_vec3_t bbox_max = pnanovdb_coord_to_vec3(pnanovdb_root_get_bbox_max(DensitySampler.GridBuffer, DensitySampler.Root));
-
 	float DeviceZ = 0.0; // let depth write test do its job
 	LastIntersection = 0.0; // Translated world space
 
@@ -345,7 +338,7 @@ bool GetFurtherVdbValue(FShadowDepthVSToPS Inputs, float4 SvPosition, out float3
 	VdbRay Ray = PrepareShadowRayFromPixel(DensitySampler.GridBuffer, DensitySampler.Grid, SvPosition, WorldToLocal, false);
 
 	return RaymarchFogVolume(	DensitySampler,
-								bbox_min, bbox_max, Ray, DeviceZ,
+								Ray, DeviceZ,
 								MaterialParameters, RandSequence,
 								LocalToWorld, WorldToLocal, SvPosition, LastIntersection);
 }

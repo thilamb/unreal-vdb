@@ -81,38 +81,23 @@ BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbShaderParams, )
 	// Vdb data
 	SHADER_PARAMETER(float, Threshold)
 	// Light data
-	//SHADER_PARAMETER_STRUCT_REF(FDeferredLightUniformStruct, DeferredLight)
 	SHADER_PARAMETER(int, bApplyEmissionAndTransmittance)
 	SHADER_PARAMETER(int, bApplyDirectLighting)
 	SHADER_PARAMETER(int, bApplyShadowTransmittance)
 	SHADER_PARAMETER(int, LightType)
-	SHADER_PARAMETER(float, VolumetricScatteringIntensity)
+	SHADER_PARAMETER_STRUCT_INCLUDE(FDeferredLightUniformStruct, DeferredLight)
 	// Shadow data
-	SHADER_PARAMETER(float, ShadowStepSize)
-	//SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FForwardLightData, ForwardLightData)
 	SHADER_PARAMETER_STRUCT(FForwardLightData, ForwardLightData)
-	//SHADER_PARAMETER_STRUCT_INCLUDE(FVolumeShadowingShaderParameters, VolumeShadowingShaderParameters)
-	//SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
+	SHADER_PARAMETER_STRUCT_INCLUDE(FVolumeShadowingShaderParameters, VolumeShadowingShaderParameters)
 	SHADER_PARAMETER(int32, VirtualShadowMapId)
 	// Indirect Lighting
 	//SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FLumenTranslucencyLightingUniforms, LumenGIVolumeStruct)
 END_GLOBAL_SHADER_PARAMETER_STRUCT()
 
-BEGIN_SHADER_PARAMETER_STRUCT(FVdbShaderParametersPS, )
-	SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
-	SHADER_PARAMETER_STRUCT_INCLUDE(FVolumeShadowingShaderParameters, VolumeShadowingShaderParameters)
-	SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
-	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FVdbShaderParams, VdbUniformBuffer)
-	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FInstanceCullingGlobalUniforms, InstanceCulling)
-	SHADER_PARAMETER_STRUCT_REF(FDeferredLightUniformStruct, DeferredLight)
-	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FLumenTranslucencyLightingUniforms, LumenGIVolumeStruct)
-	RENDER_TARGET_BINDING_SLOTS()
-END_SHADER_PARAMETER_STRUCT()
 
-template<bool IsLevelSet, bool UseTemperatureBuffer, bool UseColorBuffer, bool NicerEnvLight, bool Trilinear>
 class FVdbShaderPS : public FMeshMaterialShader
 {
-	DECLARE_SHADER_TYPE(FVdbShaderPS, MeshMaterial);
+	DECLARE_INLINE_TYPE_LAYOUT(FVdbShaderPS, NonVirtual);
 
 	LAYOUT_FIELD(FShaderResourceParameter, DensityVdbBuffer);
 	LAYOUT_FIELD(FShaderResourceParameter, TemperatureVdbBuffer);
@@ -123,6 +108,19 @@ class FVdbShaderPS : public FMeshMaterialShader
 	LAYOUT_FIELD(FShaderParameter, CustomFloatData0);
 	LAYOUT_FIELD(FShaderParameter, CustomFloatData1);
 	LAYOUT_FIELD(FShaderParameter, CustomFloatData2);
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		// Rant: I still don't really understand how these structs work. As far as I understand:
+		// Here you can only bind Uniform Buffers. All other options will not be passed to shader (even if some will compile)
+		// If Uniform buffer is static it will "just work" (I think). If not, you need to add a LAYOUT_FIELD.
+		// Most Uniform buffers have a non-uniform buffer form, usually just a struct that can be included/nested in a sub-uniform buffer.
+		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+		SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FVdbShaderParams, VdbUniformBuffer)
+		// THIS ONE PARTICULARLY REQUIRES STATIC UBO BINDING, so let's do it
+		SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
+		// Render targets
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
 
 	FVdbShaderPS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
 		: FMeshMaterialShader(Initializer)
@@ -152,11 +150,6 @@ public:
 	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
 	{
 		FMaterialShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
-		OutEnvironment.SetDefine(TEXT("VDB_LEVEL_SET"), IsLevelSet);
-		OutEnvironment.SetDefine(TEXT("USE_TEMPERATURE_VDB"), UseTemperatureBuffer);
-		OutEnvironment.SetDefine(TEXT("USE_COLOR_VDB"), UseColorBuffer);
-		OutEnvironment.SetDefine(TEXT("NICER_BUT_EXPENSIVE_ENVLIGHT"), NicerEnvLight);
-		OutEnvironment.SetDefine(TEXT("USE_TRILINEAR_SAMPLING"), Trilinear);
 		OutEnvironment.SetDefine(TEXT("USE_FORCE_TEXTURE_MIP"), TEXT("1"));
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MAJOR"), NANOVDB_MAJOR_VERSION_NUMBER);
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MINOR"), NANOVDB_MINOR_VERSION_NUMBER);
@@ -171,15 +164,6 @@ public:
 		// This shader takes a very long time to compile with FXC, so we pre-compile it with DXC first and then forward the optimized HLSL to FXC.
 		OutEnvironment.CompilerFlags.Add(CFLAG_PrecompileWithDXC);
 		OutEnvironment.CompilerFlags.Add(CFLAG_AllowTypedUAVLoads);
-
-
-		//FForwardLightingParameters::ModifyCompilationEnvironment(Parameters.Platform, OutEnvironment);
-
-		//if (PermutationVector.Get<FSampleOpaqueShadow>() && VirtualShadowMapSamplingSupported(Parameters.Platform))
-		//{
-		//	OutEnvironment.SetDefine(TEXT("VIRTUAL_SHADOW_MAP"), 1);
-		//	FVirtualShadowMapArray::SetShaderDefines(OutEnvironment);
-		//}
 	}
 
 	void GetShaderBindings(
@@ -206,26 +190,68 @@ public:
 	}
 };
 
+template<bool IsLevelSet, bool UseTemperatureBuffer, bool UseColorBuffer, bool NicerEnvLight, bool Trilinear>
+class TVdbShaderPS : public FVdbShaderPS
+{
+	DECLARE_SHADER_TYPE(TVdbShaderPS, MeshMaterial);
+
+	TVdbShaderPS() = default;
+	TVdbShaderPS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FVdbShaderPS(Initializer)
+	{
+		BindForLegacyShaderParameters<FParameters>(this, Initializer.PermutationId, Initializer.ParameterMap, false);
+	}
+
+	void SetParameters(
+		FRHIComputeCommandList& RHICmdList,
+		FRHIComputeShader* ShaderRHI,
+		const FViewInfo& View,
+		const FMaterialRenderProxy* MaterialProxy,
+		const FMaterial& Material
+	)
+	{
+		FMaterialShader::SetViewParameters(RHICmdList, ShaderRHI, View, View.ViewUniformBuffer);
+		FMaterialShader::SetParameters(RHICmdList, ShaderRHI, MaterialProxy, Material, View);
+	}
+
+public:
+
+	static bool ShouldCompilePermutation(const FMeshMaterialShaderPermutationParameters& Parameters)
+	{
+		return FVdbShaderPS::ShouldCompilePermutation(Parameters);
+	}
+
+	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FVdbShaderPS::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("VDB_LEVEL_SET"), IsLevelSet);
+		OutEnvironment.SetDefine(TEXT("USE_TEMPERATURE_VDB"), UseTemperatureBuffer);
+		OutEnvironment.SetDefine(TEXT("USE_COLOR_VDB"), UseColorBuffer);
+		OutEnvironment.SetDefine(TEXT("NICER_BUT_EXPENSIVE_ENVLIGHT"), NicerEnvLight);
+		OutEnvironment.SetDefine(TEXT("USE_TRILINEAR_SAMPLING"), Trilinear);
+	}
+};
+
 // TODO: this is getting ridiculous. Find other solution
-typedef FVdbShaderPS<true, false, false, false, false> FVdbShaderPS_LevelSet;
-typedef FVdbShaderPS<true, true, false, false, false> FVdbShaderPS_LevelSet_Translucent; // reusing USE_TEMPERATURE_VDB variation for translucency to avoid another variation
-typedef FVdbShaderPS<true, true, false, true, false> FVdbShaderPS_LevelSet_Translucent_EnvLight; // reusing USE_TEMPERATURE_VDB variation for translucency to avoid another variation
-typedef FVdbShaderPS<false, false, false, false, false>  FVdbShaderPS_FogVolume;
-typedef FVdbShaderPS<false, false, false, false, true>  FVdbShaderPS_FogVolume_Trilinear;
-typedef FVdbShaderPS<false, false, false, true, false>  FVdbShaderPS_FogVolume_EnvLight;
-typedef FVdbShaderPS<false, false, false, true, true>  FVdbShaderPS_FogVolume_EnvLight_Trilinear;
-typedef FVdbShaderPS<false, false, true, false, false>  FVdbShaderPS_FogVolume_Color;
-typedef FVdbShaderPS<false, false, true, false, true>  FVdbShaderPS_FogVolume_Color_Trilinear;
-typedef FVdbShaderPS<false, false, true, true, false>  FVdbShaderPS_FogVolume_Color_EnvLight;
-typedef FVdbShaderPS<false, false, true, true, true>  FVdbShaderPS_FogVolume_Color_EnvLight_Trilinear;
-typedef FVdbShaderPS<false, true, false, false, false>  FVdbShaderPS_FogVolume_Blackbody;
-typedef FVdbShaderPS<false, true, false, false, true>  FVdbShaderPS_FogVolume_Blackbody_Trilinear;
-typedef FVdbShaderPS<false, true, false, true, false>  FVdbShaderPS_FogVolume_Blackbody_EnvLight;
-typedef FVdbShaderPS<false, true, false, true, true>  FVdbShaderPS_FogVolume_Blackbody_EnvLight_Trilinear;
-typedef FVdbShaderPS<false, true, true, false, false>  FVdbShaderPS_FogVolume_Blackbody_Color;
-typedef FVdbShaderPS<false, true, true, false, true>  FVdbShaderPS_FogVolume_Blackbody_Color_Trilinear;
-typedef FVdbShaderPS<false, true, true, true, false>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight;
-typedef FVdbShaderPS<false, true, true, true, true>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear;
+typedef TVdbShaderPS<true, false, false, false, false> FVdbShaderPS_LevelSet;
+typedef TVdbShaderPS<true, true, false, false, false> FVdbShaderPS_LevelSet_Translucent; // reusing USE_TEMPERATURE_VDB variation for translucency to avoid another variation
+typedef TVdbShaderPS<true, true, false, true, false> FVdbShaderPS_LevelSet_Translucent_EnvLight; // reusing USE_TEMPERATURE_VDB variation for translucency to avoid another variation
+typedef TVdbShaderPS<false, false, false, false, false>  FVdbShaderPS_FogVolume;
+typedef TVdbShaderPS<false, false, false, false, true>  FVdbShaderPS_FogVolume_Trilinear;
+typedef TVdbShaderPS<false, false, false, true, false>  FVdbShaderPS_FogVolume_EnvLight;
+typedef TVdbShaderPS<false, false, false, true, true>  FVdbShaderPS_FogVolume_EnvLight_Trilinear;
+typedef TVdbShaderPS<false, false, true, false, false>  FVdbShaderPS_FogVolume_Color;
+typedef TVdbShaderPS<false, false, true, false, true>  FVdbShaderPS_FogVolume_Color_Trilinear;
+typedef TVdbShaderPS<false, false, true, true, false>  FVdbShaderPS_FogVolume_Color_EnvLight;
+typedef TVdbShaderPS<false, false, true, true, true>  FVdbShaderPS_FogVolume_Color_EnvLight_Trilinear;
+typedef TVdbShaderPS<false, true, false, false, false>  FVdbShaderPS_FogVolume_Blackbody;
+typedef TVdbShaderPS<false, true, false, false, true>  FVdbShaderPS_FogVolume_Blackbody_Trilinear;
+typedef TVdbShaderPS<false, true, false, true, false>  FVdbShaderPS_FogVolume_Blackbody_EnvLight;
+typedef TVdbShaderPS<false, true, false, true, true>  FVdbShaderPS_FogVolume_Blackbody_EnvLight_Trilinear;
+typedef TVdbShaderPS<false, true, true, false, false>  FVdbShaderPS_FogVolume_Blackbody_Color;
+typedef TVdbShaderPS<false, true, true, false, true>  FVdbShaderPS_FogVolume_Blackbody_Color_Trilinear;
+typedef TVdbShaderPS<false, true, true, true, false>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight;
+typedef TVdbShaderPS<false, true, true, true, true>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear;
 
 //-----------------------------------------------------------------------------
 
@@ -575,5 +601,12 @@ class FVdbPrincipledPS : public FGlobalShader
 		OutEnvironment.SetDefine(TEXT("SHADER_PIXEL"), 1);
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MAJOR"), NANOVDB_MAJOR_VERSION_NUMBER);
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MINOR"), NANOVDB_MINOR_VERSION_NUMBER);
+
+		bool bSupportVirtualShadowMap = IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+		if (bSupportVirtualShadowMap)
+		{
+			OutEnvironment.SetDefine(TEXT("VIRTUAL_SHADOW_MAP"), 1);
+			FVirtualShadowMapArray::SetShaderDefines(OutEnvironment);
+		}
 	}
 };

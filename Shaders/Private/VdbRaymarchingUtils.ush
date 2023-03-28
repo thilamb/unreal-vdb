@@ -1,0 +1,278 @@
+// Copyright Thibault Lambert
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http ://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+
+#ifndef D_VDB_RAYMARCHING_UTILS
+#define D_VDB_RAYMARCHING_UTILS
+
+#include "/Plugin/VdbVolume/Private/VdbCommon.ush"
+#include "/Plugin/VdbVolume/Private/VdbMaterial.ush"
+
+#define SUPPORT_CONTACT_SHADOWS 0
+
+#define DYNAMICALLY_SHADOWED 1
+#define TREAT_MAXDEPTH_UNSHADOWED 1
+
+#define NO_TRANSLUCENCY_AVAILABLE
+
+#ifndef HARD_SURFACE_SHADOWING
+	#define HARD_SURFACE_SHADOWING 1
+#endif // HARD_SURFACE_SHADOWING
+
+// Forward Lighting Data
+#define ForwardLightData VdbParams.ForwardLightData
+#define DeferredLightUniforms VdbParams
+#include "/Engine/Private/LightGridCommon.ush"
+#include "/Engine/Private/DeferredLightingCommon.ush"
+//#include "/Engine/Private/LightData.ush"
+
+#include "/Engine/Private/ForwardShadowingCommon.ush"
+
+#define VOLUME_SHADOW_SAMPLING_INPUT 0
+#define Light0Shadow VdbParams
+#include "/Engine/Private/VolumeLightingCommon.ush"
+
+#if VIRTUAL_SHADOW_MAP
+	#include "/Engine/Private/VirtualShadowMaps/VirtualShadowMapProjectionCommon.ush"
+#endif
+
+FDeferredLightData LoadLightData(uint LightType)
+{
+	FDeferredLightData LightData = (FDeferredLightData)0;
+	LightData.TranslatedWorldPosition = GetDeferredLightTranslatedWorldPosition();
+	LightData.InvRadius = DeferredLightUniforms.InvRadius;
+	LightData.Color = DeferredLightUniforms.Color * DeferredLightUniforms.VolumetricScatteringIntensity;
+	LightData.FalloffExponent = DeferredLightUniforms.FalloffExponent;
+	LightData.Direction = DeferredLightUniforms.Direction;
+	LightData.Tangent = DeferredLightUniforms.Tangent;
+	LightData.SpotAngles = DeferredLightUniforms.SpotAngles;
+	LightData.SourceRadius = DeferredLightUniforms.SourceRadius;
+	LightData.SourceLength = DeferredLightUniforms.SourceLength;
+	LightData.SoftSourceRadius = DeferredLightUniforms.SoftSourceRadius;
+	LightData.SpecularScale = DeferredLightUniforms.SpecularScale;
+	LightData.ContactShadowLength = abs(DeferredLightUniforms.ContactShadowLength);
+	LightData.ContactShadowLengthInWS = DeferredLightUniforms.ContactShadowLength < 0.0f;
+	LightData.ContactShadowNonShadowCastingIntensity = DeferredLightUniforms.ContactShadowNonShadowCastingIntensity;
+	LightData.DistanceFadeMAD = DeferredLightUniforms.DistanceFadeMAD;
+	LightData.ShadowMapChannelMask = DeferredLightUniforms.ShadowMapChannelMask;
+	LightData.ShadowedBits = DeferredLightUniforms.ShadowedBits;
+	LightData.bInverseSquared = LightType != LIGHT_TYPE_DIRECTIONAL && DeferredLightUniforms.FalloffExponent == 0; // Directional lights don't use 'inverse squared attenuation'
+
+	LightData.RectLightBarnCosAngle = DeferredLightUniforms.RectLightBarnCosAngle;
+	LightData.RectLightBarnLength = DeferredLightUniforms.RectLightBarnLength;
+	LightData.RectLightAtlasMaxLevel = DeferredLightUniforms.RectLightAtlasMaxLevel;
+	LightData.RectLightAtlasUVOffset = DeferredLightUniforms.RectLightAtlasUVOffset;
+	LightData.RectLightAtlasUVScale = DeferredLightUniforms.RectLightAtlasUVScale;
+
+	// Lumen interpretation
+	LightData.bRadialLight = LightType != LIGHT_TYPE_DIRECTIONAL;
+	LightData.bSpotLight = LightType == LIGHT_TYPE_SPOT;
+	LightData.bRectLight = LightType == LIGHT_TYPE_RECT;
+
+	LightData.HairTransmittance = InitHairTransmittanceData();
+	return LightData;
+}
+
+float ComputeHardSurfaceShadowFactor(
+	float3 TranslatedWorldPosition,
+	inout FDeferredLightData LightData,
+	uint LightType
+)
+{
+	float HardSurfaceShadowFactor = 1.0;
+
+#if HARD_SURFACE_SHADOWING
+	// Evaluate hard-surface shadow term
+	if (LightType == LIGHT_TYPE_DIRECTIONAL)
+	{
+		float SceneDepth = dot(TranslatedWorldPosition - PrimaryView.TranslatedWorldCameraOrigin, View.ViewForward);
+		bool bShadowingFromValidUVArea = false;
+		float ShadowFactor = ComputeDirectionalLightDynamicShadowing(TranslatedWorldPosition, SceneDepth, bShadowingFromValidUVArea);
+
+		if (bShadowingFromValidUVArea)
+		{
+			HardSurfaceShadowFactor *= ShadowFactor;
+		}
+	}
+	else // Local lights
+	{
+		bool bShadowingFromValidUVArea = false;
+		float ShadowFactor = ComputeLight0VolumeShadowing(TranslatedWorldPosition, LightData.bRadialLight && !LightData.bSpotLight, LightData.bSpotLight, bShadowingFromValidUVArea);
+
+		if (bShadowingFromValidUVArea)
+		{
+			HardSurfaceShadowFactor *= ShadowFactor;
+		}
+	}
+
+#if VIRTUAL_SHADOW_MAP
+	if (VdbParams.VirtualShadowMapId != INDEX_NONE)
+	{
+		FVirtualShadowMapSampleResult VirtualShadowMapSample = SampleVirtualShadowMapTranslatedWorld(VdbParams.VirtualShadowMapId, TranslatedWorldPosition);
+		HardSurfaceShadowFactor *= VirtualShadowMapSample.ShadowFactor;
+	}
+#endif // VIRTUALSHADOW_MAP
+
+#endif // HARD_SURFACE_SHADOWING
+
+	return HardSurfaceShadowFactor;
+}
+
+// Raymarch towards light. Compute shadow transmittance
+float3 GetTransmittance(
+	float3 pos, // index space
+	float3 dir, // index space
+	VdbSampler Sampler,
+	float StepMultiplier,
+	float4x4 LocalToWorld,
+	float Threshold,
+	in out RandomSequence RandSequence,
+	in out float FirstIntersection,
+	FMaterialPixelParameters MaterialParameters)
+{
+	VdbRay Ray;
+	Ray.Origin = pos;
+	Ray.Direction = dir;
+	Ray.TMin = 0.0001f; // DeltaFloat;
+	Ray.TMax = POSITIVE_INFINITY;
+	FirstIntersection = POSITIVE_INFINITY;
+
+	if (!CheckBounds(Ray, Sampler.MinBounds - VOLUME_PADDING, Sampler.MaxBounds + VOLUME_PADDING))
+		return 1.0f;
+
+	float RaymarchDistance = Ray.TMax - Ray.TMin;
+	float StepSize = (LOCAL_STEP_SIZE * StepMultiplier) / VOXEL_SIZE; // Index Space
+	const uint NumSteps = min(ceil(RaymarchDistance / StepSize), MAX_NUM_STEPS);
+	float StepWorldMeters = (LOCAL_STEP_SIZE * StepMultiplier) * CENTIMETER_TO_METER;
+
+	FPixelMaterialInputs PixelMaterialInputs = (FPixelMaterialInputs)0;
+
+	float3 Transmittance = 1.0;
+
+	float AccumDensity = 0.0;
+	for (uint iStep = 0; iStep < NumSteps; ++iStep)
+	{
+		float s = Ray.TMin + (iStep + lerp(0.5, RandomSequence_GenerateSample1D(RandSequence), JITTER_MULT)) * StepSize;
+		float3 iPos = pnanovdb_hdda_ray_start(Ray.Origin, s, Ray.Direction);
+
+		// Update coordinates
+		float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, Sampler.GridBuffer, Sampler.Grid);
+		float3 TranslatedWorldPos = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
+
+		float4 ClipPos = mul(float4(TranslatedWorldPos, 1.0), PrimaryView.TranslatedWorldToClip);
+		float4 SvPosition = ClipPos / ClipPos.w;
+		SvPosition.xy = (0.5 * SvPosition.xy + 0.5) * PrimaryView.BufferSizeAndInvSize.xy; // TODO: check, this might be an issue with shadow views
+
+		CalcMaterialParametersEx(
+			MaterialParameters, PixelMaterialInputs,
+			SvPosition, SvPositionToScreenPosition(SvPosition),
+			true,
+			TranslatedWorldPos, TranslatedWorldPos);
+
+		// Only sample Density related attributes
+		half3 Displacement = SampleDisplacement(PixelMaterialInputs);
+		half3 SigmaT = SampleScattering(PixelMaterialInputs);
+		float2 DensityModifications = SampleDensityModifications(PixelMaterialInputs);
+
+		float Density = ReadValue(iPos - Displacement, Sampler.GridBuffer, Sampler.GridType, Sampler.Accessor);
+#if LEVEL_SET
+		Density = Density < 0.0 ? 1.0 : 0.0;
+#else
+		Density = UpdateDensity(Density, DENSITY_MULT, DensityModifications);
+#endif
+
+		if (Density != 0.0)
+		{
+			FirstIntersection = min(FirstIntersection, s);
+		}
+
+		Transmittance *= exp(-StepWorldMeters * Density * SigmaT);
+		if (all(Transmittance < Threshold))
+		{
+			Transmittance = 0.0;
+			break;
+		}
+	}
+	return Transmittance;
+}
+
+float3 GetInscattering(
+	VdbSampler Sampler,
+	float StepMultiplier,
+	float Threshold,
+	float4x4 LocalToWorld,
+	float4x4 WorldToLocal,
+	in out RandomSequence RandSequence,
+	FMaterialPixelParameters MaterialParameters,
+
+	float3 LocalPosition,
+	float3 TranslatedWorldPosition,
+	inout FDeferredLightData LightData,
+	uint LightType,
+	float3 LocalDirLight,
+	bool bApplyShadowTransmittance
+)
+{
+	float3 Inscattering = 0.0;
+
+#if DIM_USE_INSCATTERING_VOLUME
+	//float3 LocalShadowRayOrigin = mul(float4(WorldPosition, 1.0), GetWorldToLocal()).xyz;
+	//float3 LocalBoundsMin = GetLocalBoundsOrigin() - GetLocalBoundsExtent();
+	//float3 TransmittanceUVW = saturate((LocalShadowRayOrigin - LocalBoundsMin) / (2.0 * GetLocalBoundsExtent()));
+	//float MipLevel = 0;
+
+	//Inscattering = SampleLightingCache(TransmittanceUVW, MipLevel);
+
+#else // DIM_USE_INSCATTERING_VOLUME
+	float3 L = LightData.Direction;
+	float3 ToLight = L * 10000;
+
+	float LightAttenuation = 1.0;
+	if (LightType != LIGHT_TYPE_DIRECTIONAL)
+	{
+		LightAttenuation = GetLocalLightAttenuation(TranslatedWorldPosition, LightData, ToLight, L);
+		if (LightData.bRectLight)
+		{
+			FRect Rect = GetRect(ToLight, LightData);
+			LightAttenuation *= IntegrateLight(Rect);
+		}
+		else
+		{
+			FCapsuleLight Capsule = GetCapsule(ToLight, LightData);
+			Capsule.DistBiasSqr = 0;
+			LightAttenuation *= IntegrateLight(Capsule, LightData.bInverseSquared);
+		}
+	}
+
+	float HardSurfaceShadowFactor = ComputeHardSurfaceShadowFactor(TranslatedWorldPosition, LightData, LightType);
+	Inscattering = LightData.Color * LightAttenuation * HardSurfaceShadowFactor;
+	if (any(Inscattering > 0.0) && bApplyShadowTransmittance)
+	{
+		float Dummy = 0.0;
+		Inscattering *= GetTransmittance(
+			LocalPosition, LocalDirLight,
+			Sampler,
+			StepMultiplier,
+			LocalToWorld, Threshold, RandSequence, Dummy, MaterialParameters);
+		if (!COLORED_TRANSMITTANCE)
+		{
+			Inscattering = Average(Inscattering);
+		}
+	}
+#endif // DIM_USE_INSCATTERING_VOLUME
+
+	return Inscattering;
+}
+
+#endif // D_VDB_RAYMARCHING_UTILS

@@ -16,7 +16,6 @@
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/Random.ush"
 #include "/Engine/Private/ReflectionEnvironmentShared.ush"
-#include "/Plugin/VdbVolume/Private/VdbLightingUtils.ush"
 #include "/Engine/Generated/Material.ush"
 #include "/Engine/Generated/VertexFactory.ush"
 
@@ -64,6 +63,7 @@ Texture2D				BlackbodyColor; // curve atlas
 
 #include "/Plugin/VdbVolume/Private/VdbCommon.ush"
 #include "/Plugin/VdbVolume/Private/VdbMaterial.ush"
+#include "/Plugin/VdbVolume/Private/VdbRaymarchingUtils.ush"
 
 //-----------------------------------------------------------------------------------------------------------
 // Tracing through a NanoVDB volume
@@ -77,9 +77,6 @@ float4 RaymarchFogVolume(
 #if USE_COLOR_VDB
 	VdbSampler ColorSampler,
 #endif
-	pnanovdb_vec3_t bbox_min,
-	pnanovdb_vec3_t bbox_max,
-
 	VdbRay Ray,
 	float DeviceZ,
 	RandomSequence RandSequence,
@@ -92,7 +89,7 @@ float4 RaymarchFogVolume(
 	// ------------------------------------------------------------------------
 	// Test against volume, and update Ray start/end to fit volume
 
-	if (!CheckBounds(Ray, bbox_min - VOLUME_PADDING, bbox_max + VOLUME_PADDING))
+	if (!CheckBounds(Ray, DensitySampler.MinBounds - VOLUME_PADDING, DensitySampler.MaxBounds + VOLUME_PADDING))
 		return float4(0.0, 0.0, 0.0, 0.0);
 
 	// ------------------------------------------------------------------------
@@ -101,13 +98,14 @@ float4 RaymarchFogVolume(
 	float3 Transmittance = 1.f;
 	float3 Radiance = 0.0;
 
-#if !MATERIAL_SHADINGMODEL_UNLIT
-	float3 LightDir = WorldToIndexDirection(View.DirectionalLightDirection, WorldToLocal, DensitySampler.GridBuffer, DensitySampler.Grid); // Index space
-	float3 LightCol = View.DirectionalLightColor.rgb;
-	float CosThetaPhase = dot(LightDir, Ray.Direction);
+	#if !MATERIAL_SHADINGMODEL_UNLIT
+		FDeferredLightData LightData = LoadLightData(VdbParams.LightType);
 
-	float3 EnvLight = GetSkySHDiffuseSimple(float3(0.0f, 0.0f, 0.0f)) * View.SkyLightColor.rgb; // without SH directionality
-#endif
+		float3 LocalDirLight = WorldToIndexDirection(LightData.Direction, WorldToLocal, DensitySampler.GridBuffer, DensitySampler.Grid);
+		float CosThetaPhase = dot(LocalDirLight, Ray.Direction);
+
+		float3 EnvLight = GetSkySHDiffuseSimple(float3(0.0f, 0.0f, 0.0f)) * View.SkyLightColor.rgb; // without SH directionality
+	#endif
 
 	// ------------------------------------------------------------------------
 	// Raymarch with fixed steps
@@ -116,20 +114,27 @@ float4 RaymarchFogVolume(
 	float RaymarchDistance = Ray.TMax - Ray.TMin; // Index space
 	const uint NumSteps = min(ceil(RaymarchDistance / StepSize), MAX_NUM_STEPS);
 	float StepWorldMeters = LOCAL_STEP_SIZE * CENTIMETER_TO_METER;
+	float MinDistLocal = POSITIVE_INFINITY;
 
 	FPixelMaterialInputs PixelMaterialInputs = (FPixelMaterialInputs)0;
-	
-	float FirstIntersectionS = POSITIVE_INFINITY;
 
-	LOOP for (uint iStep = 0; iStep < NumSteps; ++iStep)
+	LOOP
+	for (uint iStep = 0; iStep < NumSteps; ++iStep)
 	{
-		float s = Ray.TMin + (iStep + lerp(0.5, RandomSequence_GenerateSample1D(RandSequence), JITTER_MULT)) * StepSize;
-		pnanovdb_vec3_t iPos = pnanovdb_hdda_ray_start(Ray.Origin, s, Ray.Direction);
+		// ------------------------------------------------------------------------
+		// Get Intersection if any
 
+		float LocalDist = Ray.TMin + (iStep + lerp(0.5, RandomSequence_GenerateSample1D(RandSequence), JITTER_MULT)) * StepSize;
+
+		// ------------------------------------------------------------------------
 		// Update coordinates
-		float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
+
+		float3 LocalPosition = pnanovdb_hdda_ray_start(Ray.Origin, LocalDist, Ray.Direction);
+		float3 WorldPos = IndexToWorldPosition(LocalPosition, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
 		float3 TranslatedWorldPos = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
 
+		// ------------------------------------------------------------------------
+		// Sample material
 		CalcMaterialParametersEx(
 			MaterialParameters, PixelMaterialInputs,
 			SvPosition, SvPositionToScreenPosition(SvPosition),
@@ -137,77 +142,109 @@ float4 RaymarchFogVolume(
 			TranslatedWorldPos, TranslatedWorldPos);
 
 		half3 EmissiveColor = SampleEmissive(PixelMaterialInputs);
-		half3 Displacement = SampleDisplacement(PixelMaterialInputs);
 		half3 SigmaT = SampleScattering(PixelMaterialInputs);
+		half3 Displacement = SampleDisplacement(PixelMaterialInputs);
 		float2 DensityModifications = SampleDensityModifications(PixelMaterialInputs);
 
-		float Density = SAMPLING_FLOAT_FILTERING(iPos - Displacement, DensitySampler.GridBuffer, DensitySampler.GridType, DensitySampler.Accessor);
+		float Density = SAMPLING_FLOAT_FILTERING(LocalPosition - Displacement, DensitySampler.GridBuffer, DensitySampler.GridType, DensitySampler.Accessor);
 		Density = UpdateDensity(Density, DENSITY_MULT, DensityModifications);
-		if (Density == 0.0) continue;
 
-		FirstIntersectionS = min(FirstIntersectionS, s);
-
+		// ------------------------------------------------------------------------
 		// Compute scattering coefficients
+
 		float3 Extinction = SigmaT * Density;
 		float3 Scattering = Extinction * ALBEDO; // aka SigmaS * Density
 
-		// ------------------------------------------------------------------------
-		// Update total Radiance with all incoming ligth sources
 
+		// ------------------------------------------------------------------------
+		// Compute local Step Transmittance 
+
+		float3 SimpleStepTransmittance = Transmittance * StepWorldMeters;
 #ifdef ANALYTIC_INTEGRATION
 		Extinction = max(Extinction, 0.00000001);
 		float3 TransmittanceIntegral = (1.0 - exp(-StepWorldMeters * Extinction)) / Extinction;
 		float3 StepTransmittance = Transmittance * TransmittanceIntegral;
 #else
-		float3 StepTransmittance = Transmittance * StepWorldMeters;
+		float3 StepTransmittance = SimpleStepTransmittance;
 #endif
 		if (!COLORED_TRANSMITTANCE)
 		{
 			// Using average instead of float3 value, to avoid weird color shifts and be more user-friendly
 			StepTransmittance = Average(StepTransmittance);
+			SimpleStepTransmittance = Average(SimpleStepTransmittance);
 		}
 
-		float3 StepRadiance = 0.0;
+		// ------------------------------------------------------------------------
+		// Purely emissive blackbodies, only on first light pass
+
+		if (VdbParams.bApplyEmissionAndTransmittance)
+		{
+#if USE_TEMPERATURE_VDB
+			// Second VDB buffer should be Temperature to simulate a blackbody volume
+			float Temperature = SAMPLING_FLOAT_FILTERING(LocalPosition, TemperatureSampler.GridBuffer, TemperatureSampler.GridType, TemperatureSampler.Accessor) * BLACKBODY_TEMPERATURE;
+			float3 TemperatureColor = 0.0;
+			if (CURVE_INDEX >= 0)
+			{
+				// Sample user defined color curve
+				float2 uv = float2(Temperature, (CURVE_INDEX + 0.5) / float(CURVE_HEIGHT));
+				TemperatureColor = BlackbodyColor.Sample(VdbParams.LinearTexSampler, uv).rgb;
+			}
+			else
+			{
+				// Use physically based temperature to color
+				TemperatureColor = ColorTemperatureToRGB(Temperature);
+			}
+
+			// Use "simple" non-analytic step transmission because we don't want it to be influenced by extinction as blackbodies are pure emissive
+			Radiance += SimpleStepTransmittance * StepWorldMeters * TemperatureColor * BLACKBODY_INTENSITY;
+#endif
+			// Regular emissive
+			Radiance += StepTransmittance * EmissiveColor;
+
+			// TODO lumenGI
+		}
+
+		if (Density == 0.0) continue;
+
+		MinDistLocal = min(MinDistLocal, LocalDist);
+
+		// ------------------------------------------------------------------------
+		// Compute scattering light & shadows
 
 #if !MATERIAL_SHADINGMODEL_UNLIT
 	// I'm choosing to use Color grid as a Color tint only and not participate in scattering
 	#if USE_COLOR_VDB
-		float3 Color = SAMPLING_VECTOR_FILTERING(iPos, ColorSampler.GridBuffer, ColorSampler.GridType, ColorSampler.Accessor);
+		float3 Color = SAMPLING_VECTOR_FILTERING(LocalPosition, ColorSampler.GridBuffer, ColorSampler.GridType, ColorSampler.Accessor);
 	#else
 		float3 Color = 1.0;
 	#endif
-		
-		float OpaqueShadow = 1.0;// ComputeShadows(TranslatedWorldPos, DeviceZ);
 
-		// Only support single directional lighting.
+		float3 ShadowTransmittance = GetInscattering(
+			DensitySampler,
+			SHADOW_STEP_SIZE_MULT,
+			VdbParams.Threshold,
+			LocalToWorld, WorldToLocal,
+			RandSequence, MaterialParameters,
+			LocalPosition, TranslatedWorldPos,
+			LightData, VdbParams.LightType, LocalDirLight,
+			VdbParams.bApplyShadowTransmittance);
+
+		Radiance += StepTransmittance * Scattering * ShadowTransmittance * PhaseHG(CosThetaPhase, ANISOTROPY) * Color;
+
+		if (VdbParams.bApplyEmissionAndTransmittance)
 		{
-			float FirstIntersectionS = 0.0;
-			float3 ShadowTransmittance = GetLightTransmittance(
-				iPos, LightDir,
-				DensitySampler,
-				bbox_min, bbox_max,
-				SHADOW_STEP_SIZE_MULT,
-				LocalToWorld, VdbParams.Threshold, RandSequence, FirstIntersectionS, MaterialParameters);
-			if (!COLORED_TRANSMITTANCE)
-			{
-				ShadowTransmittance = Average(ShadowTransmittance);
-			}
-			StepRadiance += OpaqueShadow * StepTransmittance * Scattering * LightCol * ShadowTransmittance * PhaseHG(CosThetaPhase, ANISOTROPY) * Color;
-		}
-		
-	// Ambient light contribution (skylight aka environment light)
+			// Ambient light contribution (skylight aka environment light)
+	
 	#if NICER_BUT_EXPENSIVE_ENVLIGHT
-		{
 			// Random sample in entire sphere direction to capture Ambient environment
-			float FirstIntersectionS = 0.0;
+			float MinDistLocal = 0.0;
 			float2 rnd = RandomSequence_GenerateSample2D(RandSequence);
 			float3 ShadowDirection = SampleHenyeyGreenstein(0.0, rnd.x, rnd.y);
-			float3 ShadowTransmittance = GetLightTransmittance(
-				iPos, ShadowDirection,
-				DensitySampler, 
-				bbox_min, bbox_max,
+			float3 ShadowTransmittance = GetTransmittance(
+				LocalPosition, ShadowDirection,
+				DensitySampler,
 				2.0 * SHADOW_STEP_SIZE_MULT,
-				LocalToWorld, VdbParams.Threshold, RandSequence, FirstIntersectionS, MaterialParameters);
+				LocalToWorld, VdbParams.Threshold, RandSequence, MinDistLocal, MaterialParameters);
 			if (!COLORED_TRANSMITTANCE)
 			{
 				ShadowTransmittance = Average(ShadowTransmittance);
@@ -216,40 +253,17 @@ float4 RaymarchFogVolume(
 			float3 WorldDir = IndexToWorldDirection(ShadowDirection, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
 			EnvLight = GetSkySHDiffuse(WorldDir) * View.SkyLightColor.rgb;
 
-			StepRadiance += StepTransmittance * Scattering * EnvLight * (ShadowTransmittance + AMBIENT) * Color;
-		}
+			Radiance += StepTransmittance * Scattering * EnvLight * (ShadowTransmittance + AMBIENT) * Color;
 	#else
-		StepRadiance += StepTransmittance * Scattering * EnvLight * (1.0 + AMBIENT) * Color;
+			Radiance += StepTransmittance * Scattering * EnvLight * (1.0 + AMBIENT) * Color;
 	#endif
+		}
 
 #endif
 
-
-#if USE_TEMPERATURE_VDB
-		// Second VDB buffer should be Temperature to simulate a blackbody volume
-		float Temperature = SAMPLING_FLOAT_FILTERING(iPos, TemperatureSampler.GridBuffer, TemperatureSampler.GridType, TemperatureSampler.Accessor) * BLACKBODY_TEMPERATURE;
-		float3 TemperatureColor = 0.0;
-		if (CURVE_INDEX >= 0)
-		{
-			// Sample user defined color curve
-			float2 uv = float2(Temperature, (CURVE_INDEX + 0.5) / float(CURVE_HEIGHT));
-			TemperatureColor = BlackbodyColor.Sample(VdbParams.LinearTexSampler, uv).rgb;
-		}
-		else
-		{
-			// Use physically based temperature to color
-			TemperatureColor = ColorTemperatureToRGB(Temperature);
-		}
-
-		StepRadiance += StepTransmittance * TemperatureColor * BLACKBODY_INTENSITY;
-#endif
-
-        // Regular emissive
-		StepRadiance += StepTransmittance * EmissiveColor;
-
-		Radiance += StepRadiance;
-
+		// ------------------------------------------------------------------------
 		// Update Transmittance
+
 		Transmittance *= exp(-StepWorldMeters * Extinction);
 
 		if (all(Transmittance < VdbParams.Threshold))
@@ -260,8 +274,8 @@ float4 RaymarchFogVolume(
 	}
 	
 	// Re-doing computation at the end to avoid weird issue when trilinear sampling is enabled.
-	pnanovdb_vec3_t iPos = pnanovdb_hdda_ray_start(Ray.Origin, FirstIntersectionS, Ray.Direction);
-	float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
+	pnanovdb_vec3_t LocalPosition = pnanovdb_hdda_ray_start(Ray.Origin, MinDistLocal, Ray.Direction);
+	float3 WorldPos = IndexToWorldPosition(LocalPosition, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
 	FirstIntersection = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
 	
 	return float4(Radiance, 1.0 - Average(Transmittance));
@@ -297,10 +311,6 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 #if USE_COLOR_VDB
 	VdbSampler ColorSampler = InitVdbSampler(ColorVdbBuffer);
 #endif
-
-	// Global values (could be computed on CPU, and passed to shader instead)
-	pnanovdb_vec3_t bbox_min = pnanovdb_coord_to_vec3(pnanovdb_root_get_bbox_min(DensitySampler.GridBuffer, DensitySampler.Root));
-	pnanovdb_vec3_t bbox_max = pnanovdb_coord_to_vec3(pnanovdb_root_get_bbox_max(DensitySampler.GridBuffer, DensitySampler.Root));
 
 	// ------------------------------------------------------------------------
 	// Prepare variables
@@ -341,7 +351,7 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 							#if USE_COLOR_VDB
 								ColorSampler,
 							#endif
-							bbox_min, bbox_max, iRay, DeviceZ,
+							iRay, DeviceZ,
 							RandSequence, MaterialParameters,
 							LocalToWorld, WorldToLocal, SvPosition, FirstIntersection);
 	}
