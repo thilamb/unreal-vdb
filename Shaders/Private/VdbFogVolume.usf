@@ -65,6 +65,17 @@ Texture2D				BlackbodyColor; // curve atlas
 #include "/Plugin/VdbVolume/Private/VdbMaterial.ush"
 #include "/Plugin/VdbVolume/Private/VdbRaymarchingUtils.ush"
 
+#include "/Engine/Private/SHCommon.ush"
+#define FrontLayerTranslucencyReflectionsStruct VdbParams
+#define RadianceCacheInterpolation VdbParams
+#define LumenGIVolumeStruct VdbParams
+#ifndef IS_MATERIAL_SHADER
+	#define IS_MATERIAL_SHADER 1
+#endif
+#include "/Engine/Private/Lumen/LumenTranslucencyVolumeShared.ush"
+
+#define DIM_USE_LUMEN_GI 1 // TODO use permutations
+
 //-----------------------------------------------------------------------------------------------------------
 // Tracing through a NanoVDB volume
 //-----------------------------------------------------------------------------------------------------------
@@ -155,7 +166,6 @@ float4 RaymarchFogVolume(
 		float3 Extinction = SigmaT * Density;
 		float3 Scattering = Extinction * ALBEDO; // aka SigmaS * Density
 
-
 		// ------------------------------------------------------------------------
 		// Compute local Step Transmittance 
 
@@ -200,8 +210,6 @@ float4 RaymarchFogVolume(
 #endif
 			// Regular emissive
 			Radiance += StepTransmittance * EmissiveColor;
-
-			// TODO lumenGI
 		}
 
 		if (Density == 0.0) continue;
@@ -212,24 +220,25 @@ float4 RaymarchFogVolume(
 		// Compute scattering light & shadows
 
 #if !MATERIAL_SHADINGMODEL_UNLIT
-	// I'm choosing to use Color grid as a Color tint only and not participate in scattering
 	#if USE_COLOR_VDB
-		float3 Color = SAMPLING_VECTOR_FILTERING(LocalPosition, ColorSampler.GridBuffer, ColorSampler.GridType, ColorSampler.Accessor);
-	#else
-		float3 Color = 1.0;
+		// Only using input VDB color as a color tint
+		Scattering *= SAMPLING_VECTOR_FILTERING(LocalPosition, ColorSampler.GridBuffer, ColorSampler.GridType, ColorSampler.Accessor);
 	#endif
 
-		float3 ShadowTransmittance = GetInscattering(
-			DensitySampler,
-			SHADOW_STEP_SIZE_MULT,
-			VdbParams.Threshold,
-			LocalToWorld, WorldToLocal,
-			RandSequence, MaterialParameters,
-			LocalPosition, TranslatedWorldPos,
-			LightData, VdbParams.LightType, LocalDirLight,
-			VdbParams.bApplyShadowTransmittance);
+		if (VdbParams.bApplyDirectLighting)
+		{
+			float3 ShadowTransmittance = GetInscattering(
+				DensitySampler,
+				SHADOW_STEP_SIZE_MULT,
+				VdbParams.Threshold,
+				LocalToWorld, WorldToLocal,
+				RandSequence, MaterialParameters,
+				LocalPosition, TranslatedWorldPos,
+				LightData, VdbParams.LightType, LocalDirLight,
+				VdbParams.bApplyShadowTransmittance);
 
-		Radiance += StepTransmittance * Scattering * ShadowTransmittance * PhaseHG(CosThetaPhase, ANISOTROPY) * Color;
+			Radiance += StepTransmittance * Scattering * ShadowTransmittance * PhaseHG(CosThetaPhase, ANISOTROPY);
+		}
 
 		if (VdbParams.bApplyEmissionAndTransmittance)
 		{
@@ -253,10 +262,29 @@ float4 RaymarchFogVolume(
 			float3 WorldDir = IndexToWorldDirection(ShadowDirection, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
 			EnvLight = GetSkySHDiffuse(WorldDir) * View.SkyLightColor.rgb;
 
-			Radiance += StepTransmittance * Scattering * EnvLight * (ShadowTransmittance + AMBIENT) * Color;
+			Radiance += StepTransmittance * Scattering * EnvLight * (ShadowTransmittance + AMBIENT);
 	#else
-			Radiance += StepTransmittance * Scattering * EnvLight * (1.0 + AMBIENT) * Color;
+			Radiance += StepTransmittance * Scattering * EnvLight * (1.0 + AMBIENT);
 	#endif
+		
+	#if DIM_USE_LUMEN_GI
+			FTwoBandSHVectorRGB TranslucencyGISH = GetTranslucencyGIVolumeLighting(LWCPromote(WorldPos), PrimaryView.WorldToClip, true);
+
+		#if NICER_BUT_EXPENSIVE_ENVLIGHT
+			FTwoBandSHVector DiffuseTransferSH = CalcDiffuseTransferSH(WorldDir, 1);
+			float3 IndirectInscattering = max(DotSH(TranslucencyGISH, DiffuseTransferSH), 0.0) * ShadowTransmittance;
+		#else
+			float3 CameraWorldDir = IndexToWorldDirection(Ray.Direction, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
+
+			float PhaseG = 0.0; 
+			FTwoBandSHVector RotatedHGZonalHarmonic;
+			RotatedHGZonalHarmonic.V = float4(1.0f, CameraWorldDir.y, CameraWorldDir.z, CameraWorldDir.x) * float4(1.0f, PhaseG, PhaseG, PhaseG);
+			float3 IndirectInscattering = max(DotSH(TranslucencyGISH, RotatedHGZonalHarmonic), 0);
+		#endif	
+
+			// Note: Phase is accounted for in spherical hamonic calculation
+			Radiance += StepTransmittance * Scattering * IndirectInscattering;
+	#endif // DIM_USE_LUMEN_GI
 		}
 
 #endif

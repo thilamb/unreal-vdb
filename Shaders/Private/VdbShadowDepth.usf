@@ -140,12 +140,12 @@ void SetShadowDepthOutputs(
 #endif
 }
 
-VdbRay PrepareShadowRayFromPixel(pnanovdb_buf_t grid_buf, pnanovdb_grid_handle_t grid, float4 SvPosition, float4x4 WorldToLocal, bool Forward)
+VdbRay PrepareShadowRayFromPixel(pnanovdb_buf_t grid_buf, pnanovdb_grid_handle_t grid, float4 SvPosition, float4x4 WorldToLocal, float DeviceZ, bool Forward)
 {
 	float4 ClipPosition = SvPositionToScreenPosition(SvPosition) / SvPosition.w; // NDC to Clip
 
-	float4 Near = mul(float4(ClipPosition.xy, 1.0, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld); // near (world space)
-	float4 Far = mul(float4(ClipPosition.xy, 0.000000000001, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld); // scene gbuffer (world space)
+	float4 Near = mul(float4(ClipPosition.xy, NearDepthValue, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld); // near (world space)
+	float4 Far = mul(float4(ClipPosition.xy, DeviceZ, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld); // scene gbuffer (world space)
 
 	float3 Start = Near.xyz / Near.w;
 	Start -= LWCHackToFloat(VdbDepthParams.ShadowPreViewTranslation);
@@ -190,9 +190,6 @@ void MainVS(
 		out nointerpolation uint PackedPageInfo : TEXCOORD8,
 	#endif
 	out float4 OutPosition : SV_POSITION
-	#if ONEPASS_POINTLIGHT_SHADOW
-		, out uint LayerIndex : SV_RenderTargetArrayIndex
-	#endif
 	#if VIRTUAL_SM_ENABLED	
 		// OLA-TODO: this collides with instanced stereo, which thankfully is not used with shadow maps, so should be fine, presumably.
 		, out float4 OutVirtualSmPageClip : SV_ClipDistance
@@ -278,7 +275,6 @@ void MainVS(
 bool RaymarchFogVolume(
 	VdbSampler DensitySampler,
 	VdbRay Ray,
-	float DeviceZ,
 	FMaterialPixelParameters MaterialParameters,
 	RandomSequence RandSequence,
 	float4x4 LocalToWorld,
@@ -286,7 +282,7 @@ bool RaymarchFogVolume(
 	float4 SvPosition,
 	out float3 FirstIntersection)
 {
-	float FirstIntersectionS = 0.0;
+	float MinDistLocal = 0.0;
 	float3 Transmittance = 0.0;
 	pnanovdb_vec3_t iPos = 0.0;
 
@@ -307,9 +303,9 @@ bool RaymarchFogVolume(
 			Ray.Origin, Ray.Direction,
 			DensitySampler,
 			2.0 * SHADOW_STEP_SIZE_MULT,
-			LocalToWorld, SHADOW_THRESHOLD, RandSequence, FirstIntersectionS, MaterialParameters);
+			LocalToWorld, SHADOW_THRESHOLD, RandSequence, MinDistLocal, MaterialParameters);
 		Transmittance = Average(Transmittance);
-		iPos = pnanovdb_hdda_ray_start(Ray.Origin, FirstIntersectionS, Ray.Direction);
+		iPos = pnanovdb_hdda_ray_start(Ray.Origin, MinDistLocal, Ray.Direction);
 	}
 
 	float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
@@ -329,16 +325,19 @@ bool GetFurtherVdbValue(FShadowDepthVSToPS Inputs, float4 SvPosition, out float3
 	float4x4 WorldToLocal = LWCHackToFloat(GetPrimitiveData(PrimId).WorldToLocal);
 	float4x4 LocalToWorld = LWCHackToFloat(GetPrimitiveData(PrimId).LocalToWorld);
 
-	float DeviceZ = 0.0; // let depth write test do its job
+	float DeviceZ = FarDepthValue; // let depth write test do its job
+#if HAS_INVERTED_Z_BUFFER
+	DeviceZ = max(DeviceZ, 0.000000000001); // either no Z value, or too far to even consider
+#endif
 	LastIntersection = 0.0; // Translated world space
 
 	RandomSequence RandSequence;
 	RandomSequence_Initialize(RandSequence, SvPosition.xy, 0, ResolvedView.StateFrameIndex + ResolvedView.Random, 1);
 	
-	VdbRay Ray = PrepareShadowRayFromPixel(DensitySampler.GridBuffer, DensitySampler.Grid, SvPosition, WorldToLocal, false);
+	VdbRay Ray = PrepareShadowRayFromPixel(DensitySampler.GridBuffer, DensitySampler.Grid, SvPosition, WorldToLocal, DeviceZ, false);
 
 	return RaymarchFogVolume(	DensitySampler,
-								Ray, DeviceZ,
+								Ray,
 								MaterialParameters, RandSequence,
 								LocalToWorld, WorldToLocal, SvPosition, LastIntersection);
 }

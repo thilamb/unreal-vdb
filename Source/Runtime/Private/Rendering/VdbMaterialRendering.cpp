@@ -571,9 +571,7 @@ void SetupRenderPassParameters(
 	PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
 
 	// Indirect lighting data
-	//auto* LumenUniforms = GraphBuilder.AllocParameters<FLumenTranslucencyLightingUniforms>();
-	//LumenUniforms->Parameters = GetLumenTranslucencyLightingParameters(GraphBuilder, ViewInfo->LumenTranslucencyGIVolume, ViewInfo->LumenFrontLayerTranslucency);
-	//PassParameters->LumenGIVolumeStruct = GraphBuilder.CreateUniformBuffer(LumenUniforms);
+	VdbParameters->LumenGIVolumeStruct = GetLumenTranslucencyLightingParameters(GraphBuilder, ViewInfo->LumenTranslucencyGIVolume, ViewInfo->LumenFrontLayerTranslucency);
 
 	// Pass params
 	PassParameters->View = ViewInfo->ViewUniformBuffer;
@@ -635,23 +633,11 @@ void FVdbMaterialRendering::RenderLight(
 			FDepthStencilBinding(Parameters.DepthTexture, ERenderTargetLoadAction::ELoad, FExclusiveDepthStencil::DepthWrite_StencilNop);
 	}
 
-
-	//FDeferredLightUniformStruct DeferredLightUniform;
-	////auto* DeferredLightStruct = GraphBuilder.AllocParameters<FDeferredLightUniformStruct>();
-	//if (LightSceneInfo)
-	//{
-	//	DeferredLightUniform = GetDeferredLightParameters(*ViewInfo, *LightSceneInfo);
-	//	//*DeferredLightStruct = GetDeferredLightParameters(*ViewInfo, *LightSceneInfo);
-	//}
-	//TUniformBufferRef<FDeferredLightUniformStruct> DeferredLight = CreateUniformBufferImmediate(DeferredLightUniform, UniformBuffer_SingleDraw);
-
-	//FVirtualShadowMapSamplingParameters VsmSamplingParams = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
-
 	GraphBuilder.AddPass(
 		Translucent ? RDG_EVENT_NAME("Vdb Translucent Rendering") : RDG_EVENT_NAME("Vdb Opaque Rendering"),
 		PassParameters,
 		ERDGPassFlags::Raster,
-		[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxy, bWriteDepth/*, DeferredLight, VsmSamplingParams*/, FirstLight = ApplyEmissionAndTransmittance](FRHICommandListImmediate& RHICmdList)
+		[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxy, bWriteDepth, FirstLight = ApplyEmissionAndTransmittance](FRHICommandListImmediate& RHICmdList)
 		{
 			SCOPED_DRAW_EVENT(RHICmdList, StatVdbMaterial);
 			SCOPED_GPU_STAT(RHICmdList, StatVdbMaterial);
@@ -673,8 +659,6 @@ void FVdbMaterialRendering::RenderLight(
 					ShaderElementData.DensityBufferSRV = Proxy->GetDensityRenderResource()->GetBufferSRV();
 					ShaderElementData.TemperatureBufferSRV = Proxy->GetTemperatureRenderResource() ? Proxy->GetTemperatureRenderResource()->GetBufferSRV() : nullptr;
 					ShaderElementData.ColorBufferSRV = Proxy->GetColorRenderResource() ? Proxy->GetColorRenderResource()->GetBufferSRV() : nullptr;
-					//ShaderElementData.DeferredUniformBuffer = DeferredLight;
-					//ShaderElementData.VirtualShadowMap = VsmSamplingParams.VirtualShadowMap->GetRHI();
 					if (!ShaderElementData.DensityBufferSRV)
 						return;
 

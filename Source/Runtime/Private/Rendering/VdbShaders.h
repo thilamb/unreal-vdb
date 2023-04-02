@@ -91,7 +91,7 @@ BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbShaderParams, )
 	SHADER_PARAMETER_STRUCT_INCLUDE(FVolumeShadowingShaderParameters, VolumeShadowingShaderParameters)
 	SHADER_PARAMETER(int32, VirtualShadowMapId)
 	// Indirect Lighting
-	//SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FLumenTranslucencyLightingUniforms, LumenGIVolumeStruct)
+	SHADER_PARAMETER_STRUCT_INCLUDE(FLumenTranslucencyLightingParameters, LumenGIVolumeStruct)
 END_GLOBAL_SHADER_PARAMETER_STRUCT()
 
 
