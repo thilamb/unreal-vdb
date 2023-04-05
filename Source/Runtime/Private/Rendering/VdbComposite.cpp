@@ -20,6 +20,8 @@
 #include "PixelShaderUtils.h"
 #include "SceneRenderTargetParameters.h"
 #include "SceneView.h"
+#include "FogRendering.h"
+#include "VdbCommon.h"
 
 static TAutoConsoleVariable<int32> CVarVdbCompositeDebugMode(
 	TEXT("r.Vdb.DebugMode"), 0,
@@ -51,6 +53,9 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputTexture)
 		SHADER_PARAMETER_SAMPLER(SamplerState, InputSampler)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, DepthTexture)
+		// Fog (Height + Volumetric + Atmospheric)
+		SHADER_PARAMETER(int, EnableFog)
+		SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FFogUniformParameters, FogStruct)
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 };
@@ -77,11 +82,16 @@ void VdbComposite::CompositeFullscreen(FRDGBuilder& GraphBuilder, FRDGTexture* I
 
 	FIntRect Viewport(FIntPoint(0, 0), OutTexture->Desc.Extent);
 
+	const FViewInfo* ViewInfo = static_cast<const FViewInfo*>(View);
+	TRDGUniformBufferRef<FFogUniformParameters> FogBuffer = CreateFogUniformBuffer(GraphBuilder, *ViewInfo);
+
 	FCompositePS::FParameters* PassParameters = GraphBuilder.AllocParameters<FCompositePS::FParameters>();
 	PassParameters->ViewUniformBuffer = View->ViewUniformBuffer;
 	PassParameters->InputTexture = InputTexture;
 	PassParameters->InputSampler = TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 	PassParameters->DepthTexture = InDepthTexture ? InDepthTexture : InputTexture;
+	PassParameters->EnableFog = FVdbCVars::CVarVolumetricVdbApplyFog.GetValueOnRenderThread();
+	PassParameters->FogStruct = FogBuffer;
 	PassParameters->RenderTargets[0] = FRenderTargetBinding(OutTexture, Clear ? ERenderTargetLoadAction::EClear : ERenderTargetLoadAction::ELoad);
 	if (InDepthTexture)
 	{

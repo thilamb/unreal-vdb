@@ -47,6 +47,7 @@ struct FVdbCVars
 	static TAutoConsoleVariable<int32> CVarVolumetricVdbDenoiser;
 	static TAutoConsoleVariable<float> CVarVolumetricVdbThreshold;
 	static TAutoConsoleVariable<bool> CVarVolumetricVdbAfterTransparents;
+	static TAutoConsoleVariable<bool> CVarVolumetricVdbApplyFog;
 };
 
 struct FVdbGridInfo

@@ -53,6 +53,11 @@ TAutoConsoleVariable<bool> FVdbCVars::CVarVolumetricVdbAfterTransparents(
 	TEXT("VDBs are rendered before transparent objects by default (false). If true, VDBs will be rendered after transparent objects."),
 	ECVF_RenderThreadSafe);
 
+TAutoConsoleVariable<bool> FVdbCVars::CVarVolumetricVdbApplyFog(
+	TEXT("r.Vdb.ApplyFog"), true,
+	TEXT("Apply Height, Volumetric and Atmospheric Fog on VDBs. Enabled by default."),
+	ECVF_RenderThreadSafe);
+
 FArchive& operator<<(FArchive& Ar, nanovdb::GridHandle<nanovdb::HostBuffer>& NanoGridHandle)
 {
 	Ar.UsingCustomVersion(FVdbCustomVersion::GUID);

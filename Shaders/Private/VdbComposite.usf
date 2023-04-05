@@ -17,6 +17,52 @@
 Texture2D InputTexture;
 SamplerState InputSampler;
 Texture2D DepthTexture;
+int EnableFog;
+
+#include "/Engine/Private/HeightFogCommon.ush"
+#include "/Engine/Private/SkyAtmosphereCommon.ush"
+
+// Height + Volumetric + Atmospheric Fog
+float4 EvaluateFog(float3 WorldPosition, float SceneDepth)
+{
+	const float3 CameraRelative_WorldPosition = WorldPosition - LWCHackToFloat(PrimaryView.WorldCameraOrigin);
+	float4 HeightFogging = CalculateHeightFog(CameraRelative_WorldPosition);
+	float4 Fogging = HeightFogging;
+
+	if (FogStruct.ApplyVolumetricFog > 0)
+	{
+		const uint EyeIndex = 0;
+		float3 VolumeUV = ComputeVolumeUV_DEPRECATED(WorldPosition, LWCHackToFloat(PrimaryView.WorldToClip));
+		Fogging = CombineVolumetricFog(HeightFogging, VolumeUV, EyeIndex, SceneDepth);
+	}
+
+	Fogging.rgb *= View.PreExposure;
+
+	if (View.SkyAtmosphereApplyCameraAerialPerspectiveVolume > 0.0f)
+	{
+		float4 NDCPosition = mul(float4(WorldPosition.xyz, 1), LWCHackToFloat(PrimaryView.WorldToClip));
+
+		// Sample the aerial perspective (AP).
+		Fogging = GetAerialPerspectiveLuminanceTransmittanceWithFogOver(
+			View.RealTimeReflectionCapture,
+			View.SkyAtmosphereCameraAerialPerspectiveVolumeSizeAndInvSize,
+			NDCPosition,
+			CameraRelative_WorldPosition * CM_TO_SKY_UNIT,
+			View.CameraAerialPerspectiveVolume,
+			View.CameraAerialPerspectiveVolumeSampler,
+			View.SkyAtmosphereCameraAerialPerspectiveVolumeDepthResolutionInv,
+			View.SkyAtmosphereCameraAerialPerspectiveVolumeDepthResolution,
+			View.SkyAtmosphereAerialPerspectiveStartDepthKm,
+			View.SkyAtmosphereCameraAerialPerspectiveVolumeDepthSliceLengthKm,
+			View.SkyAtmosphereCameraAerialPerspectiveVolumeDepthSliceLengthKmInv,
+			View.OneOverPreExposure,
+			Fogging);
+	}
+
+	return Fogging;
+}
+
+//-----------------------------------------------------------------------------
 
 void MainPS(float4 SvPosition : SV_POSITION
 			, out float4 OutColor : SV_Target0
@@ -28,6 +74,18 @@ void MainPS(float4 SvPosition : SV_POSITION
 	float2 BufferUV = SvPosition.xy * View.BufferSizeAndInvSize.zw;
 	float4 RadianceAndThroughput = InputTexture.SampleLevel(InputSampler, BufferUV, 0);
 
+#if USE_DEPTH
+	float DeviceZ = DepthTexture.Load(int3(SvPosition.xy, 0)).x;
+	OutDepth = DeviceZ;
+
+	if (EnableFog > 0)
+	{
+		float3 AbsoluteWorldPosition = LWCHackToFloat(SvPositionToWorld(float4(SvPosition.xy, DeviceZ, 1.0)));
+		const float4 Fog = EvaluateFog(AbsoluteWorldPosition, ConvertFromDeviceZ(DeviceZ));
+		RadianceAndThroughput.rgb = RadianceAndThroughput.rgb * Fog.a + Fog.rgb * RadianceAndThroughput.a;
+	}
+#endif
+
 #if DEBUG_DISPLAY == 1 // RADIANCE_ONLY
 	OutColor = float4(RadianceAndThroughput.rgb, RadianceAndThroughput.a);
 #elif DEBUG_DISPLAY == 2 // THROUGHPUT_ONLY
@@ -36,7 +94,4 @@ void MainPS(float4 SvPosition : SV_POSITION
 	OutColor = float4(RadianceAndThroughput.rgb, RadianceAndThroughput.a);
 #endif
 
-#if USE_DEPTH
-	OutDepth = DepthTexture.Load(int3(SvPosition.xy, 0)).x;
-#endif
 }
