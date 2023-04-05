@@ -103,7 +103,7 @@ public:
 
 #if WITH_EDITOR
 	void PrepareRendering();
-	void AddFrame(nanovdb::GridHandle<>& NanoGridHandle, EQuantizationType InQuantization);
+	void AddFrame(nanovdb::GridHandle<>& NanoGridHandle, EQuantizationType InQuantization, FVdbGridInfoPtr FrameGridInfo);
 	void FinalizeImport(const FString& Filename);
 #endif
 

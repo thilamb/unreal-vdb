@@ -75,6 +75,8 @@ FArchive& operator<<(FArchive& Ar, FVolumeFrameInfos& VdbVolumeInfos)
 {
 #if WITH_EDITORONLY_DATA
 	Ar << VdbVolumeInfos.NumberActiveVoxels;
+	Ar << VdbVolumeInfos.MinValue;
+	Ar << VdbVolumeInfos.MaxValue;
 #endif
 	Ar << VdbVolumeInfos.IndexToLocal;
 	Ar << VdbVolumeInfos.Bounds;
@@ -91,7 +93,7 @@ FVolumeFrameInfos::FVolumeFrameInfos()
 {}
 
 #if WITH_EDITOR
-void FVolumeFrameInfos::UpdateFrame(nanovdb::GridHandle<>& NanoGridHandle)
+void FVolumeFrameInfos::UpdateFrame(nanovdb::GridHandle<>& NanoGridHandle, FVdbGridInfoPtr FrameGridInfo)
 {
 	const nanovdb::GridMetaData* MetaData = NanoGridHandle.gridMetaData();
 	
@@ -115,6 +117,9 @@ void FVolumeFrameInfos::UpdateFrame(nanovdb::GridHandle<>& NanoGridHandle)
 	MemoryUsage = NanoGridHandle.size();
 	NumberActiveVoxels = MetaData->activeVoxelCount();
 
+	MinValue = FrameGridInfo ? FrameGridInfo->FrameMinValue : 0.0;
+	MaxValue = FrameGridInfo ? FrameGridInfo->FrameMaxValue : 0.0;
+
 	if (NumberActiveVoxels == 0)
 	{
 		// Special to handle empty volumes. Create arbitrary smallest volume.
@@ -122,6 +127,8 @@ void FVolumeFrameInfos::UpdateFrame(nanovdb::GridHandle<>& NanoGridHandle)
 		IndexMin = FIntVector(0, 0, 0);
 		IndexMax = FIntVector(1, 1, 1);
 		Size = IndexMax - IndexMin;
+		MinValue = 0.0;
+		MaxValue = 0.0;
 	}
 }
 #endif

@@ -32,14 +32,16 @@ UVdbVolumeStatic::~UVdbVolumeStatic() = default;
 UVdbVolumeStatic::UVdbVolumeStatic(FVTableHelper & Helper) {}
 
 #if WITH_EDITOR
-void UVdbVolumeStatic::Import(nanovdb::GridHandle<>&& GridHandle, EQuantizationType Quan)
+void UVdbVolumeStatic::Import(nanovdb::GridHandle<>&& GridHandle, EQuantizationType Quan, FVdbGridInfoPtr GridInfo)
 {
-	VolumeFrameInfos.UpdateFrame(GridHandle);
+	VolumeFrameInfos.UpdateFrame(GridHandle, GridInfo);
 
 	Bounds = VolumeFrameInfos.GetBounds();
 	LargestVolume = VolumeFrameInfos.GetSize();
 	MemoryUsage = VolumeFrameInfos.GetMemoryUsage();
 	Quantization = Quan;
+	MinValue = VolumeFrameInfos.GetMinValue();
+	MaxValue = VolumeFrameInfos.GetMaxValue();
 
 	VolumeRenderInfos.GetNanoGridHandle() = MoveTemp(GridHandle);
 

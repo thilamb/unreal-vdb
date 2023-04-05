@@ -94,14 +94,28 @@ public:
 		{
 			return SNew(SBox).Padding(FMargin(4.0f, 0.0f)).VAlign(VAlign_Center)
 				[
-					SNew(STextBlock).Text(FText::FromString(VdbGridInfo->Dimensions))
+					SNew(STextBlock).Text(FText::FromString(VdbGridInfo->FrameDimensionsStr))
 				];
 		}
 		else if (ColumnName == "ActiveVoxels")
 		{
 			return SNew(SBox).Padding(FMargin(4.0f, 0.0f)).VAlign(VAlign_Center)
 				[
-					SNew(STextBlock).Text(FText::FromString(VdbGridInfo->ActiveVoxels))
+					SNew(STextBlock).Text(FText::FromString(VdbGridInfo->FrameActiveVoxelsStr))
+				];
+		}
+		else if (ColumnName == "MinValue")
+		{
+			return SNew(SBox).Padding(FMargin(4.0f, 0.0f)).VAlign(VAlign_Center)
+				[
+					SNew(STextBlock).Text(FText::FromString(VdbGridInfo->FrameMinValueStr))
+				];
+		}
+		else if (ColumnName == "MaxValue")
+		{
+			return SNew(SBox).Padding(FMargin(4.0f, 0.0f)).VAlign(VAlign_Center)
+				[
+					SNew(STextBlock).Text(FText::FromString(VdbGridInfo->FrameMaxValueStr))
 				];
 		}
 		// openvdb returns wrong memory size (unless VDB is previously parsed). Remove until it's fixed
@@ -196,8 +210,10 @@ void SVdbImporterWindow::Construct(const FArguments& InArgs)
 						+ SHeaderRow::Column("GridName").DefaultLabel(LOCTEXT("GridName", "Grid Name")).FillWidth(0.25f)
 						+ SHeaderRow::Column("Type").DefaultLabel(LOCTEXT("GridType", "Type")).FillWidth(0.1f)
 						+ SHeaderRow::Column("Class").DefaultLabel(LOCTEXT("GridClass", "Class")).FillWidth(0.15f)
-						+ SHeaderRow::Column("Dimensions").DefaultLabel(LOCTEXT("GridDimensions", "Dimensions")).FillWidth(0.15f)
+						+ SHeaderRow::Column("Dimensions").DefaultLabel(LOCTEXT("GridDimensions", "Dimensions")).FillWidth(0.20f)
 						+ SHeaderRow::Column("ActiveVoxels").DefaultLabel(LOCTEXT("GridActiveVoxels", "Active Voxels")).FillWidth(0.15f)
+						+ SHeaderRow::Column("MinValue").DefaultLabel(LOCTEXT("GridMinValue", "Min")).FillWidth(0.15f)
+						+ SHeaderRow::Column("MaxValue").DefaultLabel(LOCTEXT("GridMaxValue", "Max")).FillWidth(0.15f)
 						//+ SHeaderRow::Column("MemorySize").DefaultLabel(LOCTEXT("GridMemorySize", "Memory Size")).FillWidth(0.15f)
 					)
 				]

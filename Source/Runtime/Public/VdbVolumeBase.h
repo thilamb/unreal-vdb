@@ -91,6 +91,12 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Properties", Meta = (DisplayName = "Total Memory"))
 	FString MemoryUsageStr;
+
+	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Properties")
+	float MinValue;
+
+	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Properties")
+	float MaxValue;
 #endif
 
 	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Properties")

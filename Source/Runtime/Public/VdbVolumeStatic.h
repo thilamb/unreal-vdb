@@ -37,7 +37,7 @@ public:
 	UVdbVolumeStatic(FVTableHelper& Helper);
 
 #if WITH_EDITOR
-	void Import(nanovdb::GridHandle<>&& GridHandle, EQuantizationType Quan);
+	void Import(nanovdb::GridHandle<>&& GridHandle, EQuantizationType Quan, FVdbGridInfoPtr GridInfo);
 #endif
 
 	// UObject interface

@@ -123,7 +123,17 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 {
 	GEditor->GetEditorSubsystem<UImportSubsystem>()->BroadcastAssetPreImport(this, InClass, InParent, InName, Parms);
 
-	// try reading & parsing file
+	TArray<FString> SortedVBDFilenames = ExtractVDBFilenamesForSequence(Filename);
+	TStrongObjectPtr<UVdbImporterOptions> ImporterOptions(NewObject<UVdbImporterOptions>(GetTransientPackage(), TEXT("VDB Importer Options")));
+	ImporterOptions->IsSequence = (SortedVBDFilenames.Num() > 1);
+	ImporterOptions->ImportAsSequence = ImporterOptions->IsSequence;
+	if (ImporterOptions->IsSequence) 
+	{
+		ImporterOptions->FirstFrame = VdbImporterImpl::GetFrameNumber(SortedVBDFilenames[0]);
+		ImporterOptions->LastFrame = VdbImporterImpl::GetFrameNumber(SortedVBDFilenames.Last());
+	}
+
+	// try reading & parsing file and maybe sequence
 	TArray<FVdbGridInfoPtr> GridsInfo = VdbFileUtils::ParseVdbFromFile(Filename);
 
 	// if error, early quit:
@@ -135,16 +145,6 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 	}
 
 	bOutOperationCanceled = false;
-
-	TArray<FString> SortedVBDFilenames = ExtractVDBFilenamesForSequence(Filename);
-	TStrongObjectPtr<UVdbImporterOptions> ImporterOptions(NewObject<UVdbImporterOptions>(GetTransientPackage(), TEXT("VDB Importer Options")));
-	ImporterOptions->IsSequence = (SortedVBDFilenames.Num() > 1);
-	ImporterOptions->ImportAsSequence = ImporterOptions->IsSequence;
-	if (ImporterOptions->IsSequence) 
-	{
-		ImporterOptions->FirstFrame = VdbImporterImpl::GetFrameNumber(SortedVBDFilenames[0]);
-		ImporterOptions->LastFrame = VdbImporterImpl::GetFrameNumber(SortedVBDFilenames.Last());
-	}
 
 	if (!IsAutomatedImport())
 	{
@@ -247,7 +247,7 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 							if (gridHandle)
 							{
 								// Setup per frame infos that will always be loaded with the sequence
-								VolumeSequence->AddFrame(gridHandle, ImporterOptions->Quantization);
+								VolumeSequence->AddFrame(gridHandle, ImporterOptions->Quantization, *FrameGridInfo);
 
 								// Setup stream data
 								nanovdb::GridHandle<nanovdb::HostBuffer> NanoGridHandle = MoveTemp(gridHandle);
@@ -294,7 +294,7 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 						bool UseNewName = GridsInfo.Num() > 1 && !InName.ToString().Contains(GridInfo->GridName.ToString());
 
 						UVdbVolumeStatic* Vol = NewObject<UVdbVolumeStatic>(InParent, UVdbVolumeStatic::StaticClass(), UseNewName ? NewName : InName, Flags);
-						Vol->Import(MoveTemp(gridHandle), ImporterOptions->Quantization);
+						Vol->Import(MoveTemp(gridHandle), ImporterOptions->Quantization, GridInfo);
 						Vol->GetAssetImportData()->Update(Filename);
 
 						ResultAssets.Add(Vol);

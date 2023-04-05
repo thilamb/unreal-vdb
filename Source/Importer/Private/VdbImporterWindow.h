@@ -16,19 +16,7 @@
 
 #include "Framework/Application/SlateApplication.h"
 #include "Widgets/SCompoundWidget.h"
-
-struct FVdbGridInfo
-{
-	FName GridName;
-	FString Type;
-	FString Class;
-	FString Dimensions;
-	FString ActiveVoxels;
-	//FString MemorySize; // remove until openvdb is fixed and returns correct value
-	bool ShouldImport = true;
-};
-
-typedef TSharedPtr<FVdbGridInfo> FVdbGridInfoPtr;
+#include "VdbCommon.h"
 
 class SVdbImporterWindow : public SCompoundWidget
 {

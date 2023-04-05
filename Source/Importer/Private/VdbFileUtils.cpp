@@ -38,13 +38,9 @@ nanovdb::GridHandle<> VdbFileUtils::LoadVdbFromFile(const FString& Filepath, con
 }
 
 // Heavily inspired by OpenVDB samples
-TArray<FVdbGridInfoPtr> VdbFileUtils::ParseVdbFromFile(const FString& Path)
+TArray<FVdbGridInfoPtr> VdbFileUtils::ParseVdbFromFile(const FString& FilePath)
 {
 	TArray<FVdbGridInfoPtr> VdbGrids;
-
-	FString Filename = FPaths::GetCleanFilename(Path);
-	FString Extension = FPaths::GetExtension(Filename, false);
-	const std::string path(TCHAR_TO_UTF8(*Path));
 
 	auto CoordAsString = [](const auto& ijk) // openvdb::Coord or nanovdb::Coord
 	{
@@ -91,56 +87,107 @@ TArray<FVdbGridInfoPtr> VdbFileUtils::ParseVdbFromFile(const FString& Path)
 		return FString(ostr.str().c_str());
 	};
 
+	auto FloatAsString = [](float val)
+	{
+		std::ostringstream ostr;
+		ostr << val;
+		return FString(ostr.str().c_str());
+	};
+
+	FString Filename = FPaths::GetCleanFilename(FilePath);
+	FString Extension = FPaths::GetExtension(Filename, false);
+
 	if (Extension == "vdb")
 	{
-		openvdb::GridPtrVecPtr grids;
-		openvdb::MetaMap::Ptr meta;
+		TArray<FString> FilesToParse;
+		//if (SequencePaths.Num() > 1)
+		//{
+		//	FilesToParse = SequencePaths;
+		//}
+		//else
+		{
+			FilesToParse.Add(Filename);
+		}
 
 		openvdb::initialize();
-		openvdb::io::File file(path);
-		try
+
+		FString PathOnDisk = FPaths::GetPath(FilePath);
+
+		for (const FString& Path : FilesToParse)
 		{
-			file.open();
-			grids = file.getGrids();
-			meta = file.getMetadata();
-			file.close();
-		}
-		catch (openvdb::Exception& e)
-		{
-			UE_LOG(LogVdbFiles, Error, TEXT("Could not read VDB file %s:\n%s"), *Path, *FString(e.what()));
-			return TArray<FVdbGridInfoPtr>();
-		}
+			FString FullPath = FPaths::Combine(PathOnDisk, Path);
+			const std::string VdbPath(TCHAR_TO_ANSI(*FullPath));
 
-		for (const openvdb::GridBase::ConstPtr grid : *grids)
-		{
-			if (!grid) continue;
+			openvdb::GridPtrVecPtr grids;
+			openvdb::MetaMap::Ptr meta;
 
-			openvdb::CoordBBox bbox = grid->evalActiveVoxelBoundingBox();
+			openvdb::io::File file(VdbPath);
+			try
+			{
+				file.open();
+				grids = file.getGrids();
+				meta = file.getMetadata();
+				file.close();
+			}
+			catch (openvdb::Exception& e)
+			{
+				UE_LOG(LogVdbFiles, Error, TEXT("Could not read VDB file %s:\n%s"), *Path, *FString(e.what()));
+				return TArray<FVdbGridInfoPtr>();
+			}
 
-			FVdbGridInfoPtr GridInfo = MakeShared<FVdbGridInfo>();
-			GridInfo->GridName = FName(grid->getName().c_str());
-			GridInfo->Type = FString(grid->valueType().c_str());
-			GridInfo->Class = FString(grid->gridClassToString(grid->getGridClass()).c_str());
-			GridInfo->Dimensions = CoordAsString(bbox.extents());
-			GridInfo->ActiveVoxels = SizeAsString(grid->activeVoxelCount());
-			//GridInfo->MemorySize = BytesAsString(grid->memUsage()); // in bytes. Returns wrong values, unless it's been preloaded. Remove until fixed
+			int32 idx = 0;
+			for (const openvdb::GridBase::ConstPtr grid : *grids)
+			{
+				if (!grid) continue;
 
-			VdbGrids.Add(GridInfo);
+				float MinValue = 0.0;
+				float MaxValue = 0.0;
+				if (grid->isType<openvdb::FloatGrid>())
+				{
+					openvdb::FloatGrid::ConstPtr FloatGrid = openvdb::gridConstPtrCast<openvdb::FloatGrid>(grid);
+					FloatGrid->evalMinMax(MinValue, MaxValue);
+				}
+
+				openvdb::CoordBBox bbox = grid->evalActiveVoxelBoundingBox();
+				const openvdb::Coord& Extents = bbox.extents();
+				FIntVector BboxSize(Extents[0], Extents[1], Extents[2]);
+
+				FVdbGridInfoPtr GridInfo = MakeShared<FVdbGridInfo>();
+
+				GridInfo->GridName = FName(grid->getName().c_str());
+				GridInfo->Type = FString(grid->valueType().c_str());
+				GridInfo->Class = FString(grid->gridClassToString(grid->getGridClass()).c_str());
+				GridInfo->FrameDimensionsStr = CoordAsString(bbox.extents());
+				GridInfo->FrameActiveVoxelsStr = SizeAsString(grid->activeVoxelCount());
+				GridInfo->FrameMinValue = MinValue;
+				GridInfo->FrameMinValueStr = FloatAsString(MinValue);
+				GridInfo->FrameMaxValue = MaxValue;
+				GridInfo->FrameMaxValueStr = FloatAsString(MaxValue);
+				//GridInfo->FrameMemorySizeStr = BytesAsString(grid->memUsage()); // in bytes. Returns wrong values, unless it's been preloaded. Remove until fixed
+
+				VdbGrids.Add(GridInfo);
+			}
 		}
 	}
 	else if (Extension == "nvdb")
 	{
 		try
 		{
-			std::vector<nanovdb::io::GridMetaData> MetaDatas = nanovdb::io::readGridMetaData(path);
+			const std::string VdbPath(TCHAR_TO_UTF8(*FilePath));
+
+			std::vector<nanovdb::io::GridMetaData> MetaDatas = nanovdb::io::readGridMetaData(VdbPath);
 			for (nanovdb::io::GridMetaData& MetaData : MetaDatas)
 			{
 				FVdbGridInfoPtr GridInfo = MakeShared<FVdbGridInfo>();
 				GridInfo->GridName = FName(MetaData.gridName.c_str());
 				GridInfo->Type = FString(nanovdb::toStr(MetaData.gridType));
 				GridInfo->Class = FString(nanovdb::toStr(MetaData.gridClass));
-				GridInfo->Dimensions = CoordAsString(MetaData.indexBBox.max() - MetaData.indexBBox.min());
-				GridInfo->ActiveVoxels = SizeAsString(MetaData.voxelCount);
+				GridInfo->FrameDimensionsStr = CoordAsString(MetaData.indexBBox.max() - MetaData.indexBBox.min());
+				GridInfo->FrameActiveVoxelsStr = SizeAsString(MetaData.voxelCount);
+				GridInfo->FrameMinValueStr = FloatAsString(0.0);
+				GridInfo->FrameMaxValueStr = FloatAsString(0.0);
+				GridInfo->FrameMinValue = 0.0;
+				GridInfo->FrameMaxValue = 0.0;
 				//GridInfo->MemorySize = BytesAsString(MetaData.memUsage()); // in bytes.
 
 				VdbGrids.Add(GridInfo);
@@ -148,7 +195,7 @@ TArray<FVdbGridInfoPtr> VdbFileUtils::ParseVdbFromFile(const FString& Path)
 		}
 		catch (const std::exception& e)
 		{
-			UE_LOG(LogVdbFiles, Error, TEXT("Could not read NVDB file %s:\n%s"), *Path, *FString(e.what()));
+			UE_LOG(LogVdbFiles, Error, TEXT("Could not read NVDB file %s:\n%s"), *FilePath, *FString(e.what()));
 			return TArray<FVdbGridInfoPtr>();
 		}
 	}

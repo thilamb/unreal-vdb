@@ -372,10 +372,10 @@ void UVdbVolumeSequence::PrepareRendering()
 	InitResources();
 }
 
-void UVdbVolumeSequence::AddFrame(nanovdb::GridHandle<>& NanoGridHandle, EQuantizationType InQuantization)
+void UVdbVolumeSequence::AddFrame(nanovdb::GridHandle<>& NanoGridHandle, EQuantizationType InQuantization, FVdbGridInfoPtr FrameGridInfo)
 {
 	FVolumeFrameInfos* VolumeInfosEntry = new(VolumeFramesInfos) FVolumeFrameInfos();
-	VolumeInfosEntry->UpdateFrame(NanoGridHandle);
+	VolumeInfosEntry->UpdateFrame(NanoGridHandle, FrameGridInfo);
 
 	const nanovdb::GridMetaData* MetaData = NanoGridHandle.gridMetaData();
 	if (VolumeFramesInfos.Num() == 1)
@@ -388,6 +388,8 @@ void UVdbVolumeSequence::AddFrame(nanovdb::GridHandle<>& NanoGridHandle, EQuanti
 		MemoryUsage = VolumeInfosEntry->GetMemoryUsage();
 		Quantization = InQuantization;
 		FrameMaxMemoryUsage = MemoryUsage;
+		MinValue = VolumeInfosEntry->GetMinValue();
+		MaxValue = VolumeInfosEntry->GetMaxValue();
 	}
 	else
 	{
@@ -404,6 +406,8 @@ void UVdbVolumeSequence::AddFrame(nanovdb::GridHandle<>& NanoGridHandle, EQuanti
 		uint64 MemUsage = VolumeInfosEntry->GetMemoryUsage();
 		MemoryUsage += MemUsage;
 		FrameMaxMemoryUsage = FMath::Max(MemUsage, FrameMaxMemoryUsage);
+		MinValue = FMath::Min(VolumeInfosEntry->GetMinValue(), MinValue);
+		MaxValue = FMath::Max(VolumeInfosEntry->GetMaxValue(), MaxValue);
 	}
 }
 

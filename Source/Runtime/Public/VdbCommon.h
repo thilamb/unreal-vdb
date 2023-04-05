@@ -49,6 +49,24 @@ struct FVdbCVars
 	static TAutoConsoleVariable<bool> CVarVolumetricVdbAfterTransparents;
 };
 
+struct FVdbGridInfo
+{
+	FName GridName;
+	FString Type;
+	FString Class;
+	// Frame
+	FString FrameDimensionsStr;
+	FString FrameActiveVoxelsStr;
+	float FrameMinValue;
+	FString FrameMinValueStr;
+	float FrameMaxValue;
+	FString FrameMaxValueStr;
+	//FString FrameMemorySizeStr; // remove until openvdb is fixed and returns correct value
+	
+	bool ShouldImport = true;
+};
+typedef TSharedPtr<FVdbGridInfo> FVdbGridInfoPtr;
+
 class FVdbRenderBuffer;
 
 // Based on nanovdb::GridType enum
@@ -85,7 +103,7 @@ public:
 	FVolumeFrameInfos();
 
 #if WITH_EDITOR
-	void UpdateFrame(nanovdb::GridHandle<>& NanoGridHandle);
+	void UpdateFrame(nanovdb::GridHandle<>& NanoGridHandle, FVdbGridInfoPtr FrameGridInfo);
 #endif
 
 	const FIntVector& GetIndexMin() const { return IndexMin; }
@@ -95,11 +113,24 @@ public:
 	const FBox& GetBounds() const{ return Bounds; }
 	uint64 GetMemoryUsage() const { return MemoryUsage; }
 
+#if WITH_EDITORONLY_DATA
+	float GetMinValue() const { return MinValue; }
+	float GetMaxValue() const { return MaxValue; }
+#endif
+
 private:
 
 #if WITH_EDITORONLY_DATA
 	UPROPERTY(VisibleAnywhere, Category = "Properties")
 	uint32 NumberActiveVoxels = 0;
+
+	// Only valid if OpenVDB Float Grid
+	UPROPERTY(VisibleAnywhere, Category = "Properties")
+	float MinValue = 0.0;
+
+	// Only valid if OpenVDB Float Grid
+	UPROPERTY(VisibleAnywhere, Category = "Properties")
+	float MaxValue = 0.0;
 #endif
 
 	UPROPERTY(VisibleAnywhere, Category = "Properties")
