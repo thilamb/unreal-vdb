@@ -159,6 +159,7 @@ float4 RaymarchFogVolume(
 
 		float Density = SAMPLING_FLOAT_FILTERING(LocalPosition - Displacement, DensitySampler.GridBuffer, DensitySampler.GridType, DensitySampler.Accessor);
 		Density = UpdateDensity(Density, DENSITY_MULT, DensityModifications);
+		Density = max(Density, 0.0);
 
 		// ------------------------------------------------------------------------
 		// Compute scattering coefficients

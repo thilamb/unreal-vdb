@@ -190,6 +190,7 @@ float3 GetTransmittance(
 		Density = Density < 0.0 ? 1.0 : 0.0;
 #else
 		Density = UpdateDensity(Density, DENSITY_MULT, DensityModifications);
+		Density = max(Density, 0.0);
 #endif
 
 		if (Density != 0.0)
