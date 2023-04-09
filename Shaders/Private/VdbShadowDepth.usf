@@ -16,6 +16,17 @@
 #define SHADOW_DEPTH_SHADER 1
 #define USE_STENCIL_LOD_DITHER	0
 
+#ifndef ENABLE_NON_NANITE_VSM
+	#error "ENABLE_NON_NANITE_VSM should be defined to either 0 or 1!"
+#endif
+
+#if ENABLE_NON_NANITE_VSM
+	#define VIRTUAL_SM_ENABLED (!(ONEPASS_POINTLIGHT_SHADOW || PERSPECTIVE_CORRECT_DEPTH))
+#else
+	#define VIRTUAL_SM_ENABLED 0
+#endif
+
+#include "/Engine/Private/Nanite/NanitePackedNaniteView.ush"
 #include "/Engine/Private/Common.ush"
 
 // Reroute SceneTexturesStruct uniform buffer references to the shadow depth pass uniform buffer
@@ -43,6 +54,11 @@ StructuredBuffer<uint> DensityVdbBuffer;
 StructuredBuffer<uint> TemperatureVdbBuffer;
 StructuredBuffer<uint> ColorVdbBuffer;
 Texture2D BlackbodyColor; // curve atlas
+
+#if VERTEXSHADER && ONEPASS_POINTLIGHT_SHADOW
+	uint bUseGpuSceneInstancing;
+	uint LayerId;
+#endif
 
 // I can't make a custom MaterialExpression from a plugin. 
 // It's far from ideal but I have to adapt and use a 
@@ -140,12 +156,27 @@ void SetShadowDepthOutputs(
 #endif
 }
 
-VdbRay PrepareShadowRayFromPixel(pnanovdb_buf_t grid_buf, pnanovdb_grid_handle_t grid, float4 SvPosition, float4x4 WorldToLocal, float DeviceZ, bool Forward)
+VdbRay PrepareShadowRayFromPixel(
+	pnanovdb_buf_t grid_buf, 
+	pnanovdb_grid_handle_t grid, 
+	float4 SvPosition,
+#if ONEPASS_POINTLIGHT_SHADOW
+	uint LayerIndex,
+#endif
+	float4x4 WorldToLocal, 
+	float DeviceZ, 
+	bool Forward)
 {
 	float4 ClipPosition = SvPositionToScreenPosition(SvPosition) / SvPosition.w; // NDC to Clip
 
-	float4 Near = mul(float4(ClipPosition.xy, NearDepthValue, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld); // near (world space)
-	float4 Far = mul(float4(ClipPosition.xy, DeviceZ, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld); // scene gbuffer (world space)
+	// Light space
+#if ONEPASS_POINTLIGHT_SHADOW
+	float4 Near = mul(float4(ClipPosition.xy, NearDepthValue, 1.0), VdbDepthParams.CubeShadowClipToTranslatedWorld[LayerIndex]);
+	float4 Far = mul(float4(ClipPosition.xy, DeviceZ, 1.0), VdbDepthParams.CubeShadowClipToTranslatedWorld[LayerIndex]);
+#else
+	float4 Near = mul(float4(ClipPosition.xy, NearDepthValue, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld);
+	float4 Far = mul(float4(ClipPosition.xy, DeviceZ, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld);
+#endif
 
 	float3 Start = Near.xyz / Near.w;
 	Start -= LWCHackToFloat(VdbDepthParams.ShadowPreViewTranslation);
@@ -175,21 +206,73 @@ VdbRay PrepareShadowRayFromPixel(pnanovdb_buf_t grid_buf, pnanovdb_grid_handle_t
 	return Ray;
 }
 
+/**
+ * Load physical page offset and perform the needed scale and bias to render the instance into the given physical page,
+ * with the correct clipping set up.
+ */
+#if VIRTUAL_SM_ENABLED
+
+void ScaleBiasClipToPhysicalSmPage(FNaniteView NaniteView, inout float4 PositionClip, inout float4 ClipPlanesInOut, FPageInfo PageInfo)
+{
+	float2 vClip = PositionClip.xy;
+	float2 vUV = vClip * float2(0.5, -0.5) + 0.5 * PositionClip.w;
+	float2 vPixels = vUV * (uint(VSM_VIRTUAL_MAX_RESOLUTION_XY) >> NaniteView.TargetMipLevel);
+
+	{
+		//PointClip.xy = NaniteView.ClipSpaceScaleOffset.xy * PointClip.xy + NaniteView.ClipSpaceScaleOffset.zw * PointClip.w;
+
+		float2 Scale = exp2(-NaniteView.TargetMipLevel);
+		PositionClip.xy *= Scale;
+		PositionClip.xy += (Scale * float2(1, -1) + float2(-1, 1)) * PositionClip.w;
+	}
+
+	{
+		// Clip to allocated page rect
+		uint4 PageRect = PassStruct.PageRectBounds[NaniteView.TargetLayerIndex * VSM_MAX_MIP_LEVELS + NaniteView.TargetMipLevel];
+
+		float2 MinClip = vPixels - (PageRect.xy + 0) * VSM_PAGE_SIZE * PositionClip.w;
+		float2 MaxClip = -vPixels + (PageRect.zw + 1) * VSM_PAGE_SIZE * PositionClip.w;
+
+		ClipPlanesInOut.xy = MinClip;
+		ClipPlanesInOut.zw = MaxClip;
+	}
+}
+
+void TransformToVirtualSmPage(inout float4 PointClip, inout float4 ClipPlanesInOut, FPageInfo PageInfo, float3 PointTranslatedWorld)
+{
+	// Load nanite view and perform transform to SM space.
+	FNaniteView NaniteView = UnpackNaniteView(PassStruct.PackedNaniteViews[PageInfo.ViewId]);
+
+	PointTranslatedWorld += LWCToFloat(LWCSubtract(NaniteView.PreViewTranslation, ResolvedView.PreViewTranslation));
+	PointClip = mul(float4(PointTranslatedWorld, 1), NaniteView.TranslatedWorldToClip);
+
+	// Clamp the vertex to the near plane if it is in front of the near plane
+	// This has problems if some vertices of a triangle get clamped and others do not, also causes artifacts with non-ortho projections
+	if (PassStruct.bClampToNearPlane > 0 && PointClip.z > PointClip.w)
+	{
+		PointClip.z = 0.999999f;
+		PointClip.w = 1.0f;
+	}
+
+	ScaleBiasClipToPhysicalSmPage(NaniteView, PointClip, ClipPlanesInOut, PageInfo);
+}
+
+#endif // VIRTUAL_SM_ENABLED
+
 //-----------------------------------------------------------------------------------------------------------
 #if VERTEXSHADER
 //-----------------------------------------------------------------------------------------------------------
 
 void MainVS(
 	FVertexFactoryInput Input,
-	#if ONEPASS_POINTLIGHT_SHADOW
-		out uint LayerIndex : SV_RenderTargetArrayIndex,
-	#endif
 	out FShadowDepthVSToPS OutParameters,
-
 	#if VIRTUAL_SM_ENABLED
 		out nointerpolation uint PackedPageInfo : TEXCOORD8,
 	#endif
 	out float4 OutPosition : SV_POSITION
+	#if ONEPASS_POINTLIGHT_SHADOW
+		, out uint LayerIndex : SV_RenderTargetArrayIndex
+	#endif
 	#if VIRTUAL_SM_ENABLED	
 		// OLA-TODO: this collides with instanced stereo, which thankfully is not used with shadow maps, so should be fine, presumably.
 		, out float4 OutVirtualSmPageClip : SV_ClipDistance
@@ -315,7 +398,13 @@ bool RaymarchFogVolume(
 }
 
 
-bool GetFurtherVdbValue(FShadowDepthVSToPS Inputs, float4 SvPosition, out float3 LastIntersection)
+bool GetFurthestVdbValue(
+	FShadowDepthVSToPS Inputs, 
+	float4 SvPosition, 
+#if ONEPASS_POINTLIGHT_SHADOW
+	uint LayerIndex,
+#endif
+	out float3 LastIntersection)
 {
 	VdbSampler DensitySampler = InitVdbSampler(DensityVdbBuffer);
 
@@ -334,7 +423,16 @@ bool GetFurtherVdbValue(FShadowDepthVSToPS Inputs, float4 SvPosition, out float3
 	RandomSequence RandSequence;
 	RandomSequence_Initialize(RandSequence, SvPosition.xy, 0, ResolvedView.StateFrameIndex + ResolvedView.Random, 1);
 	
-	VdbRay Ray = PrepareShadowRayFromPixel(DensitySampler.GridBuffer, DensitySampler.Grid, SvPosition, WorldToLocal, DeviceZ, false);
+	VdbRay Ray = PrepareShadowRayFromPixel(
+		DensitySampler.GridBuffer, 
+		DensitySampler.Grid, 
+		SvPosition,
+#if ONEPASS_POINTLIGHT_SHADOW
+		LayerIndex,
+#endif
+		WorldToLocal, 
+		DeviceZ, 
+		false);
 
 	return RaymarchFogVolume(	DensitySampler,
 								Ray,
@@ -349,26 +447,37 @@ void MainPS(
 	nointerpolation uint PackedPageInfo : TEXCOORD8,
 #endif
 	in float4 SvPosition : SV_Position // after all interpolators
+#if ONEPASS_POINTLIGHT_SHADOW
+	, in uint LayerIndex : SV_RenderTargetArrayIndex
+#endif
 #if PERSPECTIVE_CORRECT_DEPTH || COMPILER_METAL || INTERPOLATE_VF_ATTRIBUTES
-	,out float OutDepth : SV_DEPTH
+	, out float OutDepth : SV_DEPTH
 #endif
 	)
 {
 	ResolvedView = ResolveView();
-
+	  
 #if INTERPOLATE_VF_ATTRIBUTES
 	
 	float3 LastIntersection = 0.0;
-	bool Valid = GetFurtherVdbValue(Inputs, SvPosition, LastIntersection);
+	bool Valid = GetFurthestVdbValue(
+		Inputs, 
+		SvPosition, 
+#if ONEPASS_POINTLIGHT_SHADOW
+		LayerIndex,
+#endif
+		LastIntersection);
 	
 	if (!Valid) discard;
 	
-	#if 1
-		float Dummy;
+	float4 WorldPos = float4(LastIntersection.xyz, 1.0);
+	#if ONEPASS_POINTLIGHT_SHADOW
+		float4 ClipPos = mul(WorldPos, PassStruct.ShadowViewProjectionMatrices[LayerIndex]);
+		OutDepth = ClipPos.z / ClipPos.w;
+	#else
 		float4 OutPosition;
 		float OutDepthZ;
 		float OutDepthBias;
-		float4 WorldPos = float4(LastIntersection.xyz, 1.0);
 	
 		SetShadowDepthOutputs(
 			PassStruct.ProjectionMatrix, // actually TranslatedWorldToClipOuterMatrix
@@ -382,10 +491,6 @@ void MainPS(
 			#endif
 			);
 		OutDepth = OutPosition.z;
-	#else
-		float4 ClipPos = mul(float4(LastIntersection.xyz, 1.0), PassStruct.ProjectionMatrix);
-		float SceneDepth = ClipPos.z / ClipPos.w;
-		OutDepth = SceneDepth;
 	#endif
 	
 #else

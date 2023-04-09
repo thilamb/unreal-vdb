@@ -194,7 +194,8 @@ float3 GetTransmittance(
 
 		if (Density != 0.0)
 		{
-			FirstIntersection = min(FirstIntersection, s);
+			// be conservative
+			FirstIntersection = min(FirstIntersection, s - StepSize);
 		}
 
 		Transmittance *= exp(-StepWorldMeters * Density * SigmaT);

@@ -257,6 +257,7 @@ typedef TVdbShaderPS<false, true, true, true, true>  FVdbShaderPS_FogVolume_Blac
 
 BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbDepthShaderParams, )
 	SHADER_PARAMETER(FMatrix44f, ShadowClipToTranslatedWorld)
+	SHADER_PARAMETER_ARRAY(FMatrix44f, CubeShadowClipToTranslatedWorld, [6])
 	SHADER_PARAMETER(FVector3f, ShadowPreViewTranslation)
 	END_GLOBAL_SHADER_PARAMETER_STRUCT()
 
@@ -420,11 +421,10 @@ public:
 
 	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
 	{
-		FMaterialShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		FMeshMaterialShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.SetDefine(TEXT("USE_FORCE_TEXTURE_MIP"), TEXT("1"));
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MAJOR"), NANOVDB_MAJOR_VERSION_NUMBER);
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MINOR"), NANOVDB_MINOR_VERSION_NUMBER);
-
 		OutEnvironment.SetDefine(TEXT("MATERIALBLENDING_MASKED"), TEXT("1"));
 	}
 

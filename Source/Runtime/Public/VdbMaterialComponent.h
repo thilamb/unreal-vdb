@@ -92,7 +92,7 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 	float Ambient = 0.0;
 
 	// We only support opaque shadows, choose after which threshold Volume is considered opaque
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (ClampMin = "0.0001", UIMin = "0.0001"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1.0"))
 	float ShadowThreshold = 0.7;
 
 	// Backward or forward scattering direction (aka directional bias).

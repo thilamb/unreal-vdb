@@ -39,41 +39,6 @@ DEFINE_LOG_CATEGORY(LogSparseVolumetrics);
 DECLARE_GPU_STAT_NAMED(StatVdbMaterial, TEXT("Vdb Material Rendering"));
 DECLARE_GPU_STAT_NAMED(StatVdbShadowDepthMaterial, TEXT("Vdb Shadow Depth Material Rendering"));
 
-
-FShadowDepthType CSMVdbShadowDepthType(true, false);
-
-//void SetupDummyForwardLightVdbParameters(FRDGBuilder& GraphBuilder, FForwardLightData& ForwardLightData)
-//{
-//	const FRDGSystemTextures& SystemTextures = FRDGSystemTextures::Get(GraphBuilder);
-//
-//	ForwardLightData.DirectionalLightShadowmapAtlas = SystemTextures.Black;
-//	ForwardLightData.DirectionalLightStaticShadowmap = GBlackTexture->TextureRHI;
-//
-//	FRDGBufferRef ForwardLocalLightBuffer = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(FVector4f));
-//	ForwardLightData.ForwardLocalLightBuffer = GraphBuilder.CreateSRV(ForwardLocalLightBuffer, PF_A32B32G32R32F);
-//
-//	FRDGBufferRef NumCulledLightsGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint32));
-//	ForwardLightData.NumCulledLightsGrid = GraphBuilder.CreateSRV(NumCulledLightsGrid, PF_R32_UINT);
-//
-//	if (RHISupportsBufferLoadTypeConversion(GMaxRHIShaderPlatform))
-//	{
-//		FRDGBufferRef CulledLightDataGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint16));
-//		ForwardLightData.CulledLightDataGrid = GraphBuilder.CreateSRV(CulledLightDataGrid, PF_R16_UINT);
-//	}
-//	else
-//	{
-//		FRDGBufferRef CulledLightDataGrid = GSystemTextures.GetDefaultBuffer(GraphBuilder, sizeof(uint32));
-//		ForwardLightData.CulledLightDataGrid = GraphBuilder.CreateSRV(CulledLightDataGrid, PF_R32_UINT);
-//	}
-//}
-//
-//TRDGUniformBufferRef<FForwardLightData> CreateDummyForwardLightUniformBuffer(FRDGBuilder& GraphBuilder)
-//{
-//	FForwardLightData* ForwardLightData = GraphBuilder.AllocParameters<FForwardLightData>();
-//	SetupDummyForwardLightVdbParameters(GraphBuilder, *ForwardLightData);
-//	return GraphBuilder.CreateUniformBuffer(ForwardLightData);
-//}
-
 //-----------------------------------------------------------------------------
 //--- FVdbMaterialRendering
 //-----------------------------------------------------------------------------
@@ -278,8 +243,10 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 
 				for (const FVdbMaterialSceneProxy* Proxy : Proxies)
 				{
-					if (Proxy && Proxy->GetMaterial() && /*Proxy->IsVisible(&InView) &&*/ Proxy->GetDensityRenderResource())
+					if (Proxy && Proxy->GetMaterial() && Proxy->GetDensityRenderResource())
 					{
+						SCOPED_DRAW_EVENTF(RHICmdList, StatVdbShadowDepthMaterial, TEXT("VDB (shadows) %s"), *Proxy->GetOwnerName().ToString());
+
 						DrawDynamicMeshPass(InView, RHICmdList,
 							[&](FDynamicPassMeshDrawListContext* DynamicMeshPassContext)
 							{
@@ -299,8 +266,8 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 									InView.Family->Scene->GetRenderScene(),
 									&InView,
 									DynamicMeshPassContext,
-									CSMVdbShadowDepthType,
-									EMeshPass::CSMShadowDepth, // TODO: support VSM (no support for masking right now so it's useless to try support VSM)
+									Parameters.ProjectedShadowInfo->GetShadowDepthType(),
+									EMeshPass::CSMShadowDepth, // TODO: support VSM
 									Proxy->IsLevelSet(), 
 									MoveTemp(ShaderElementData));
 								//ShadowInfo->bOnePassPointLightShadow
@@ -328,6 +295,14 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 	FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
 	FVdbDepthShaderParams* VdbParameters = GraphBuilder.AllocParameters<FVdbDepthShaderParams>();
 	VdbParameters->ShadowClipToTranslatedWorld = Parameters.ProjectedShadowInfo->TranslatedWorldToClipOuterMatrix.Inverse();
+	if (!Parameters.ProjectedShadowInfo->OnePassShadowViewProjectionMatrices.IsEmpty())
+	{
+		for (int32 idx = 0; idx < 6; ++idx)
+		{
+			FMatrix ViewProjMat = Parameters.ProjectedShadowInfo->OnePassShadowViewProjectionMatrices[idx];
+			VdbParameters->CubeShadowClipToTranslatedWorld[idx] = FMatrix44f(ViewProjMat.Inverse());
+		}
+	}
 	VdbParameters->ShadowPreViewTranslation = FVector3f(Parameters.ProjectedShadowInfo->PreShadowTranslation);
 	TRDGUniformBufferRef<FVdbDepthShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(VdbParameters);
 	
@@ -637,9 +612,9 @@ void FVdbMaterialRendering::RenderLight(
 		Translucent ? RDG_EVENT_NAME("Vdb Translucent Rendering") : RDG_EVENT_NAME("Vdb Opaque Rendering"),
 		PassParameters,
 		ERDGPassFlags::Raster,
-		[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxy, bWriteDepth, FirstLight = ApplyEmissionAndTransmittance](FRHICommandListImmediate& RHICmdList)
+		[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxy, bWriteDepth, LightSceneInfo, FirstLight = ApplyEmissionAndTransmittance](FRHICommandListImmediate& RHICmdList)
 		{
-			SCOPED_DRAW_EVENT(RHICmdList, StatVdbMaterial);
+			SCOPED_DRAW_EVENTF(RHICmdList, StatVdbMaterial, TEXT("VDB (main pass) %s, Light %s"), *Proxy->GetOwnerName().ToString(), LightSceneInfo ? *LightSceneInfo->Proxy->GetOwnerNameOrLabel() : *FString(""));
 			SCOPED_GPU_STAT(RHICmdList, StatVdbMaterial);
 
 			RHICmdList.SetViewport(ViewportRect.Min.X, ViewportRect.Min.Y, 0.0f, ViewportRect.Max.X, ViewportRect.Max.Y, 1.0f);

@@ -114,8 +114,6 @@ private:
 		TShaderRef<FVdbShadowDepthPS>& PixelShader
 	)
 	{
-		const bool bPositionOnlyVS = false;
-
 		// Use perspective correct shadow depths for shadow types which typically render low poly meshes into the shadow depth buffer.
 		// Depth will be interpolated to the pixel shader and written out, which disables HiZ and double speed Z.
 		// Directional light shadows use an ortho projection and can use the non-perspective correct path without artifacts.
@@ -134,19 +132,23 @@ private:
 		FMaterialShaderTypes ShaderTypes;
 
 		// Vertex shaders
-		if (bOnePassPointLightShadow)
-		{
-			if (DoesRuntimeSupportOnePassPointLightShadows(GShaderPlatformForFeatureLevel[FeatureLevel]))
+		if (bOnePassPointLightShadow) {
+			if (DoesRuntimeSupportOnePassPointLightShadows(GShaderPlatformForFeatureLevel[FeatureLevel])) {
 				ShaderTypes.AddShaderType<FVdbShadowDepthVS_OnePassPointLight>();
-			else
+			}
+			else {
 				return false;
+			}
 		}
-		else if (bVirtualShadowMap)
+		else if (bVirtualShadowMap) {
 			ShaderTypes.AddShaderType<FVdbShadowDepthVS_VirtualShadowMap>();
-		else if (bUsePerspectiveCorrectShadowDepths)
+		}
+		else if (bUsePerspectiveCorrectShadowDepths) {
 			ShaderTypes.AddShaderType<FVdbShadowDepthVS_PerspectiveCorrect>();
-		else
+		}
+		else {
 			ShaderTypes.AddShaderType<FVdbShadowDepthVS_OutputDepth>();
+		}
 
 		// Pixel shaders
 		if (bLevelSet)
