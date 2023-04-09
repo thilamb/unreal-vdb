@@ -206,7 +206,7 @@ float4 RaymarchFogVolume(
 			}
 
 			// Use "simple" non-analytic step transmission because we don't want it to be influenced by extinction as blackbodies are pure emissive
-			Radiance += SimpleStepTransmittance * StepWorldMeters * TemperatureColor * BLACKBODY_INTENSITY;
+			Radiance += SimpleStepTransmittance * TemperatureColor * BLACKBODY_INTENSITY;
 #endif
 			// Regular emissive
 			Radiance += StepTransmittance * EmissiveColor;
