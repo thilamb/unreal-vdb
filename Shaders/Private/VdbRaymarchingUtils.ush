@@ -32,11 +32,6 @@
 
 // Forward Lighting Data
 #define ForwardLightData VdbParams.ForwardLightData
-#define DeferredLightUniforms VdbParams
-#include "/Engine/Private/LightGridCommon.ush"
-#include "/Engine/Private/DeferredLightingCommon.ush"
-//#include "/Engine/Private/LightData.ush"
-
 #include "/Engine/Private/ForwardShadowingCommon.ush"
 
 #define VOLUME_SHADOW_SAMPLING_INPUT 0
@@ -46,43 +41,6 @@
 #if VIRTUAL_SHADOW_MAP
 	#include "/Engine/Private/VirtualShadowMaps/VirtualShadowMapProjectionCommon.ush"
 #endif
-
-FDeferredLightData LoadLightData(uint LightType)
-{
-	FDeferredLightData LightData = (FDeferredLightData)0;
-	LightData.TranslatedWorldPosition = GetDeferredLightTranslatedWorldPosition();
-	LightData.InvRadius = DeferredLightUniforms.InvRadius;
-	LightData.Color = DeferredLightUniforms.Color * DeferredLightUniforms.VolumetricScatteringIntensity;
-	LightData.FalloffExponent = DeferredLightUniforms.FalloffExponent;
-	LightData.Direction = DeferredLightUniforms.Direction;
-	LightData.Tangent = DeferredLightUniforms.Tangent;
-	LightData.SpotAngles = DeferredLightUniforms.SpotAngles;
-	LightData.SourceRadius = DeferredLightUniforms.SourceRadius;
-	LightData.SourceLength = DeferredLightUniforms.SourceLength;
-	LightData.SoftSourceRadius = DeferredLightUniforms.SoftSourceRadius;
-	LightData.SpecularScale = DeferredLightUniforms.SpecularScale;
-	LightData.ContactShadowLength = abs(DeferredLightUniforms.ContactShadowLength);
-	LightData.ContactShadowLengthInWS = DeferredLightUniforms.ContactShadowLength < 0.0f;
-	LightData.ContactShadowNonShadowCastingIntensity = DeferredLightUniforms.ContactShadowNonShadowCastingIntensity;
-	LightData.DistanceFadeMAD = DeferredLightUniforms.DistanceFadeMAD;
-	LightData.ShadowMapChannelMask = DeferredLightUniforms.ShadowMapChannelMask;
-	LightData.ShadowedBits = DeferredLightUniforms.ShadowedBits;
-	LightData.bInverseSquared = LightType != LIGHT_TYPE_DIRECTIONAL && DeferredLightUniforms.FalloffExponent == 0; // Directional lights don't use 'inverse squared attenuation'
-
-	LightData.RectLightBarnCosAngle = DeferredLightUniforms.RectLightBarnCosAngle;
-	LightData.RectLightBarnLength = DeferredLightUniforms.RectLightBarnLength;
-	LightData.RectLightAtlasMaxLevel = DeferredLightUniforms.RectLightAtlasMaxLevel;
-	LightData.RectLightAtlasUVOffset = DeferredLightUniforms.RectLightAtlasUVOffset;
-	LightData.RectLightAtlasUVScale = DeferredLightUniforms.RectLightAtlasUVScale;
-
-	// Lumen interpretation
-	LightData.bRadialLight = LightType != LIGHT_TYPE_DIRECTIONAL;
-	LightData.bSpotLight = LightType == LIGHT_TYPE_SPOT;
-	LightData.bRectLight = LightType == LIGHT_TYPE_RECT;
-
-	LightData.HairTransmittance = InitHairTransmittanceData();
-	return LightData;
-}
 
 float ComputeHardSurfaceShadowFactor(
 	float3 TranslatedWorldPosition,
@@ -108,7 +66,11 @@ float ComputeHardSurfaceShadowFactor(
 	else // Local lights
 	{
 		bool bShadowingFromValidUVArea = false;
+#ifdef VOLUME_SHADOW_SAMPLING_INPUT
 		float ShadowFactor = ComputeLight0VolumeShadowing(TranslatedWorldPosition, LightData.bRadialLight && !LightData.bSpotLight, LightData.bSpotLight, bShadowingFromValidUVArea);
+#else
+		float ShadowFactor = ComputeVolumeShadowing(TranslatedWorldPosition, LightData.bRadialLight && !LightData.bSpotLight, LightData.bSpotLight, bShadowingFromValidUVArea);
+#endif
 
 		if (bShadowingFromValidUVArea)
 		{

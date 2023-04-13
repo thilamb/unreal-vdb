@@ -20,6 +20,7 @@
 #include "VirtualShadowMaps/VirtualShadowMapArray.h"
 #include "SceneRendering.h"
 #include "VolumeLighting.h"
+#include "MaterialDomain.h"
 
 THIRD_PARTY_INCLUDES_START
 #include <nanovdb/NanoVDB.h>
@@ -85,13 +86,13 @@ BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbShaderParams, )
 	SHADER_PARAMETER(int, bApplyDirectLighting)
 	SHADER_PARAMETER(int, bApplyShadowTransmittance)
 	SHADER_PARAMETER(int, LightType)
-	SHADER_PARAMETER_STRUCT_INCLUDE(FDeferredLightUniformStruct, DeferredLight)
+	SHADER_PARAMETER_STRUCT(FDeferredLightUniformStruct, DeferredLight)
 	// Shadow data
 	SHADER_PARAMETER_STRUCT(FForwardLightData, ForwardLightData)
-	SHADER_PARAMETER_STRUCT_INCLUDE(FVolumeShadowingShaderParameters, VolumeShadowingShaderParameters)
+	SHADER_PARAMETER_STRUCT_INCLUDE(FVolumeShadowingShaderParametersGlobal0, VolumeShadowingShaderParameters)
 	SHADER_PARAMETER(int32, VirtualShadowMapId)
 	// Indirect Lighting
-	SHADER_PARAMETER_STRUCT_INCLUDE(FLumenTranslucencyLightingParameters, LumenGIVolumeStruct)
+	SHADER_PARAMETER_STRUCT(FLumenTranslucencyLightingParameters, LumenGIVolumeStruct)
 END_GLOBAL_SHADER_PARAMETER_STRUCT()
 
 
@@ -135,7 +136,7 @@ class FVdbShaderPS : public FMeshMaterialShader
 		CustomFloatData1.Bind(Initializer.ParameterMap, TEXT("CustomFloatData1"));
 		CustomFloatData2.Bind(Initializer.ParameterMap, TEXT("CustomFloatData2"));
 
-		PassUniformBuffer.Bind(Initializer.ParameterMap, FVdbShaderParams::StaticStructMetadata.GetShaderVariableName());
+		PassUniformBuffer.Bind(Initializer.ParameterMap, FVdbShaderParams::FTypeInfo::GetStructMetadata()->GetShaderVariableName());
 	}
 
 	FVdbShaderPS() {}
@@ -407,7 +408,7 @@ class FVdbShadowDepthPS : public FMeshMaterialShader
 		CustomFloatData1.Bind(Initializer.ParameterMap, TEXT("CustomFloatData1"));
 		CustomFloatData2.Bind(Initializer.ParameterMap, TEXT("CustomFloatData2"));
 
-		PassUniformBuffer.Bind(Initializer.ParameterMap, FVdbShaderParams::StaticStructMetadata.GetShaderVariableName());
+		PassUniformBuffer.Bind(Initializer.ParameterMap, FVdbShaderParams::FTypeInfo::GetStructMetadata()->GetShaderVariableName());
 	}
 
 	FVdbShadowDepthPS() {}

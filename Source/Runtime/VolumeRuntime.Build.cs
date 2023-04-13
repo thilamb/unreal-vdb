@@ -87,5 +87,7 @@ public class VolumeRuntime : ModuleRules
 				// ... add any modules that your module loads dynamically here ...
 			}
 			);
+
+		PublicDefinitions.Add("VDB_CAST_SHADOWS=0");
 	}
 }
