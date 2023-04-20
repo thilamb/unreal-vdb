@@ -16,7 +16,6 @@
 
 #include "UnrealClient.h"
 #include "UObject/MetaData.h"
-#include "EditorFramework\AssetImportData.h"
 
 FBox UVdbVolumeBase::ZeroBox = FBox(ForceInitToZero);
 
@@ -28,27 +27,7 @@ UVdbVolumeBase::UVdbVolumeBase(const FObjectInitializer& ObjectInitializer)
 void UVdbVolumeBase::PostInitProperties()
 {
 	Super::PostInitProperties();
-
-#if WITH_EDITORONLY_DATA
-	if (!HasAnyFlags(RF_ClassDefaultObject))
-	{
-		AssetImportData = NewObject<UAssetImportData>(this, TEXT("AssetImportData"));
-	}
-#endif
-	Super::PostInitProperties();
 }
-
-#if WITH_EDITORONLY_DATA
-void UVdbVolumeBase::GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) const
-{
-	if (AssetImportData)
-	{
-		OutTags.Add(FAssetRegistryTag(SourceFileTagName(), AssetImportData->GetSourceData().ToJson(), FAssetRegistryTag::TT_Hidden));
-	}
-
-	Super::GetAssetRegistryTags(OutTags);
-}
-#endif
 
 void UVdbVolumeBase::UpdateFromMetadata(const nanovdb::GridMetaData* MetaData)
 {
@@ -84,4 +63,14 @@ void UVdbVolumeBase::UpdateFromMetadata(const nanovdb::GridMetaData* MetaData)
 	GridName = MetaData->shortGridName();
 	MemoryUsageStr = *GetMemoryString(MemoryUsage, false);
 #endif
+}
+
+FString UVdbVolumeBase::GetType() const
+{
+#if WITH_EDITORONLY_DATA
+	return DataType;
+#else
+	return "";
+#endif
+
 }

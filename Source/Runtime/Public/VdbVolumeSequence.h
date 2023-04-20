@@ -105,6 +105,9 @@ public:
 	void PrepareRendering();
 	void AddFrame(nanovdb::GridHandle<>& NanoGridHandle, EQuantizationType InQuantization, FVdbGridInfoPtr FrameGridInfo);
 	void FinalizeImport(const FString& Filename);
+
+	// VolumeSequences are never loaded and unavailable unless we stream frames in. This forces streaming a specific frame.
+	virtual void ForceStreaming(uint32 FrameIndex) override;
 #endif
 
 	// IInterface_StreamableVolumetricAsset

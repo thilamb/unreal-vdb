@@ -40,7 +40,7 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 
 	VdbMaterialRenderExtension = FVolumeRuntimeModule::GetRenderExtension(InComponent->RenderTarget);
 
-	TemperatureOnly = !AssetComponent->DensityVolume && AssetComponent->TemperatureVolume;
+	TemperatureOnly = !AssetComponent->GetDensityVolume() && AssetComponent->GetTemperatureVolume();
 	const UVdbVolumeBase* MainVolume = AssetComponent->GetMainVolume();
 
 	const FVolumeRenderInfos* PrimaryRenderInfos = AssetComponent->GetRenderInfos(MainVolume);
@@ -67,14 +67,14 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 	CustomFloatData1 = FVector4f(InComponent->Anisotropy, InComponent->Albedo, InComponent->BlackbodyIntensity, (CurveIndex == INDEX_NONE) ? InComponent->BlackbodyTemperature : InComponent->TemperatureMultiplier);
 	CustomFloatData2 = FVector4f(InComponent->DensityMultiplier, InComponent->VolumePadding, InComponent->Ambient, InComponent->ShadowThreshold);
 
-	auto FillValue = [AssetComponent](UVdbVolumeBase* Base, FVdbRenderBuffer*& Buffer)
+	auto FillValue = [AssetComponent](const UVdbVolumeBase* Base, FVdbRenderBuffer*& Buffer)
 	{
 		const FVolumeRenderInfos* RenderInfos = AssetComponent->GetRenderInfos(Base);
 		Buffer = RenderInfos ? RenderInfos->GetRenderResource() : nullptr;
 	};
 
-	FillValue(AssetComponent->TemperatureVolume, TemperatureRenderBuffer);
-	FillValue(AssetComponent->ColorVolume, ColorRenderBuffer);
+	FillValue(AssetComponent->GetTemperatureVolume(), TemperatureRenderBuffer);
+	FillValue(AssetComponent->GetColorVolume(), ColorRenderBuffer);
 
 	bCastDynamicShadow = true;
 }

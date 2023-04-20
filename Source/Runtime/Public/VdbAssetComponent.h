@@ -23,8 +23,7 @@
 class FVolumeRenderInfos;
 class UVdbSequenceComponent;
 class UVdbVolumeBase;
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnVdbChanged, int32, FrameIndex);
+class UVdbVolumeAsset;
 
 // Can contain several grids of the same OpenVDB/NanoVDB file
 UCLASS(Blueprintable, ClassGroup = Rendering, HideCategories = (Activation, Collision, Cooking, HLOD, Navigation, VirtualTexture), meta = (BlueprintSpawnableComponent))
@@ -36,21 +35,33 @@ class UVdbAssetComponent : public UActorComponent
 
 	//----------------------------------------------------------------------------
 
-	// Principal mandatory volume (VDB float grid). If FogVolume, Density values. If LevelSet, narrow-band level set values.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Volume, meta = (AllowPrivateAccess = "true", DisplayName = "Density (float)"))
-	TObjectPtr<UVdbVolumeBase> DensityVolume;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Volume, meta = (AllowPrivateAccess = "true", DisplayName = "VDB Grids"))
+	TObjectPtr<UVdbVolumeAsset> VdbAsset;
 
-	// Optional second volume (VDB float grid). If FogVolume, Temperature values. If LevelSet, unused.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Volume, meta = (AllowPrivateAccess = "true", DisplayName = "Temperature (float)"))
-	TObjectPtr<UVdbVolumeBase> TemperatureVolume;
+	UPROPERTY(EditAnywhere, Category = Volume, meta = (AllowPrivateAccess = "true"))
+	int32 DensityGridIndex = 0;
 
-	// Optional third volume (VDB vector grid). If FogVolume, Color values. If LevelSet, unused.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Volume, meta = (AllowPrivateAccess = "true", DisplayName = "Color (vector)"))
-	TObjectPtr<UVdbVolumeBase> ColorVolume;
+	UPROPERTY(EditAnywhere, Category = Volume, meta = (AllowPrivateAccess = "true"))
+	int32 TemperatureGridIndex = -1;
+
+	UPROPERTY(EditAnywhere, Category = Volume, meta = (AllowPrivateAccess = "true"))
+	int32 ColorGridIndex = -1;
+
+	UFUNCTION(BlueprintCallable, Category = Volume)
+	UVdbVolumeBase* GetDensityVolume();
+	const UVdbVolumeBase* GetDensityVolume() const;
+	
+	UFUNCTION(BlueprintCallable, Category = Volume)
+	UVdbVolumeBase* GetTemperatureVolume();
+	const UVdbVolumeBase* GetTemperatureVolume() const;
+	
+	UFUNCTION(BlueprintCallable, Category = Volume)
+	UVdbVolumeBase* GetColorVolume();
+	const UVdbVolumeBase* GetColorVolume() const;
 
 	//----------------------------------------------------------------------------
 
-	void BroadcastFrameChanged(uint32 Frame);
+	void BroadcastFrameChanged(uint32 Frame, bool Force = false);
 	void GetReferencedContentObjects(TArray<UObject*>& Objects) const;
 
 	EVdbClass GetVdbClass() const;
@@ -70,7 +81,7 @@ class UVdbAssetComponent : public UActorComponent
 	UFUNCTION(BlueprintCallable, Category = Volume)
 	FVector3f GetVolumeUvScale() const;
 
-	UPROPERTY(BlueprintAssignable, Category = Volume)
+	DECLARE_DELEGATE(FOnVdbChanged)
 	FOnVdbChanged OnVdbChanged;
 	
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnFrameChanged, uint32);

@@ -32,7 +32,7 @@ FVdbPrincipledSceneProxy::FVdbPrincipledSceneProxy(const UVdbAssetComponent* Ass
 	, LevelSet(AssetComponent->GetVdbClass() == EVdbClass::SignedDistance)
 	, TrilinearInterpolation(InComponent->TrilinearInterpolation)
 {
-	const FVolumeRenderInfos* RenderInfosDensity = AssetComponent->GetRenderInfos(AssetComponent->DensityVolume);
+	const FVolumeRenderInfos* RenderInfosDensity = AssetComponent->GetRenderInfos(AssetComponent->GetDensityVolume());
 
 	Params.VdbDensity = RenderInfosDensity->GetRenderResource();
 	Params.IndexMin = RenderInfosDensity->GetIndexMin();
@@ -43,7 +43,7 @@ FVdbPrincipledSceneProxy::FVdbPrincipledSceneProxy(const UVdbAssetComponent* Ass
 	Params.MaxRayDepth = InComponent->MaxRayDepth;
 	Params.SamplesPerPixel = InComponent->SamplesPerPixel;
 	Params.StepSize = InComponent->StepSize;
-	Params.VoxelSize = AssetComponent->DensityVolume->GetVoxelSize();
+	Params.VoxelSize = AssetComponent->GetDensityVolume()->GetVoxelSize();
 	Params.ColoredTransmittance = uint32(InComponent->ColoredTransmittance);
 	Params.TemporalNoise = uint32(InComponent->TemporalNoise);
 	Params.Color = InComponent->Color;
@@ -69,14 +69,14 @@ FVdbPrincipledSceneProxy::FVdbPrincipledSceneProxy(const UVdbAssetComponent* Ass
 	Params.CurveIndex = CurveIndex;
 	Params.CurveAtlasHeight = CurveAtlas ? int32(CurveAtlas->TextureHeight) : 0;
 
-	auto FillValue = [AssetComponent](UVdbVolumeBase* Base, FVdbRenderBuffer*& Buffer)
+	auto FillValue = [AssetComponent](const UVdbVolumeBase* Base, FVdbRenderBuffer*& Buffer)
 	{
 		const FVolumeRenderInfos* RenderInfos = AssetComponent->GetRenderInfos(Base);
 		Buffer = RenderInfos ? RenderInfos->GetRenderResource() : nullptr;
 	};
 
-	FillValue(AssetComponent->TemperatureVolume, Params.VdbTemperature);
-	FillValue(AssetComponent->ColorVolume, Params.VdbColor);
+	FillValue(AssetComponent->GetTemperatureVolume(), Params.VdbTemperature);
+	FillValue(AssetComponent->GetColorVolume(), Params.VdbColor);
 
 	VdbRenderMgr = FVolumeRuntimeModule::GetRenderPrincipledMgr(InComponent->RenderTarget);
 }

@@ -74,7 +74,7 @@ private:
 
 	void UpdateRenderTargetIfNeeded(bool Force = false);
 
-	void CopyVdbToVolume_GameThread(uint32 FrameIndex);
+	void CopyVdbToVolume_GameThread();
 
 	void CopyVdbToVolume_RenderThread(
 		class FRHICommandListImmediate& RHICmdList, 

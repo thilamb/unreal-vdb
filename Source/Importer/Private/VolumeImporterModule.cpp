@@ -13,8 +13,7 @@
 // limitations under the License.
 
 #include "VolumeImporterModule.h"
-#include "VdbAssetTypeActions.h"
-#include "VdbSequenceAssetTypeActions.h"
+#include "VdbVolumeAssetTypeActions.h"
 
 #include "Interfaces/IPluginManager.h"
 #include "AssetToolsModule.h"
@@ -86,8 +85,7 @@ void FVdbImporterModule::InitInterfaceCustomization()
 
 	EAssetTypeCategories::Type VdbAssetCategoryBit = AssetTools.RegisterAdvancedAssetCategory(FName(TEXT("VdbVolume")), LOCTEXT("VdbAssetCategory", "VdbVolume"));
 
-	RegisterAssetTypeAction(AssetTools, MakeShareable(new FVdbAssetTypeActions(VdbAssetCategoryBit)));
-	RegisterAssetTypeAction(AssetTools, MakeShareable(new FVdbSequenceAssetTypeActions(VdbAssetCategoryBit)));
+	RegisterAssetTypeAction(AssetTools, MakeShareable(new FVdbVolumeAssetTypeActions(VdbAssetCategoryBit)));
 }
 
 void FVdbImporterModule::ReleaseInterfaceCustomization()

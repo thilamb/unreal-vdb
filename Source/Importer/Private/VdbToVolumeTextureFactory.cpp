@@ -43,10 +43,10 @@ bool UVdbToVolumeTextureFactory::ConfigureProperties()
 	return true;
 }
 
-template<typename T>
-bool ReadTypedGrid(UVdbVolumeStatic* VdbVolumeStatic, UVolumeTexture* VolumeTex, const FIntVector& IndexSize, const FIntVector& IndexMin, const FIntVector& TexSize)
+template<typename Type, typename VdbType>
+bool TReadTypedGrid(VdbType* VdbVolume, uint32 FrameIndex, UVolumeTexture* VolumeTex, const FIntVector& IndexSize, const FIntVector& IndexMin, const FIntVector& TexSize)
 {
-	const nanovdb::NanoGrid<T>* Grid = VdbVolumeStatic->GetNanoGrid<T>();
+	const nanovdb::NanoGrid<Type>* Grid = VdbVolume->GetNanoGrid<Type>(FrameIndex);
 	if (!Grid)
 		return false;
 
@@ -78,9 +78,24 @@ bool ReadTypedGrid(UVdbVolumeStatic* VdbVolumeStatic, UVolumeTexture* VolumeTex,
 }
 
 template<typename T>
-bool ReadVectorGrid(UVdbVolumeStatic* VdbVolumeStatic, UVolumeTexture* VolumeTex, const FIntVector& IndexSize, const FIntVector& IndexMin, const FIntVector& TexSize)
+bool ReadTypedGrid(UVdbVolumeBase* VdbVolume, uint32 FrameIndex, UVolumeTexture* VolumeTex, const FIntVector& IndexSize, const FIntVector& IndexMin, const FIntVector& TexSize)
 {
-	const nanovdb::NanoGrid<T>* Grid = VdbVolumeStatic->GetNanoGrid<T>();
+	if (VdbVolume->IsSequence())
+	{
+		UVdbVolumeSequence* VolumeSeq = static_cast<UVdbVolumeSequence*>(VdbVolume);
+		return TReadTypedGrid<T, UVdbVolumeSequence>(VolumeSeq, FrameIndex, VolumeTex, IndexSize, IndexMin, TexSize);
+	}
+	else
+	{
+		UVdbVolumeStatic* VolumeStatic = static_cast<UVdbVolumeStatic*>(VdbVolume);
+		return TReadTypedGrid<T, UVdbVolumeStatic>(VolumeStatic, FrameIndex, VolumeTex, IndexSize, IndexMin, TexSize);
+	}
+}
+
+template<typename Type, typename VdbType>
+bool TReadVectorGrid(VdbType* VdbVolume, uint32 FrameIndex, UVolumeTexture* VolumeTex, const FIntVector& IndexSize, const FIntVector& IndexMin, const FIntVector& TexSize)
+{
+	const nanovdb::NanoGrid<Type>* Grid = VdbVolume->GetNanoGrid<Type>(FrameIndex);
 	if (!Grid)
 		return false;
 
@@ -97,11 +112,11 @@ bool ReadVectorGrid(UVdbVolumeStatic* VdbVolumeStatic, UVolumeTexture* VolumeTex
 				nanovdb::Coord xyz(X + IndexMin.X, Y + IndexMin.Y, Z + IndexMin.Z);
 				auto Value = Acc.getValue(xyz);
 
-				if (typeid(T) == typeid(nanovdb::Vec3f))
+				if (typeid(Type) == typeid(nanovdb::Vec3f))
 				{
 					Row[X] = FFloat16Color(FLinearColor(Value[0], Value[1], Value[2], 1.0f));
 				}
-				else if (typeid(T) == typeid(nanovdb::Vec4f))
+				else if (typeid(Type) == typeid(nanovdb::Vec4f))
 				{
 					Row[X] = FFloat16Color(FLinearColor(Value[0], Value[1], Value[2], Value[3]));
 				}
@@ -111,6 +126,21 @@ bool ReadVectorGrid(UVdbVolumeStatic* VdbVolumeStatic, UVolumeTexture* VolumeTex
 	VolumeTex->Source.UnlockMip(0);
 
 	return true;
+}
+
+template<typename T>
+bool ReadVectorGrid(UVdbVolumeBase* VdbVolume, uint32 FrameIndex, UVolumeTexture* VolumeTex, const FIntVector& IndexSize, const FIntVector& IndexMin, const FIntVector& TexSize)
+{
+	if (VdbVolume->IsSequence())
+	{
+		UVdbVolumeSequence* VolumeSeq = static_cast<UVdbVolumeSequence*>(VdbVolume);
+		return TReadVectorGrid<T, UVdbVolumeSequence>(VolumeSeq, FrameIndex, VolumeTex, IndexSize, IndexMin, TexSize);
+	}
+	else
+	{
+		UVdbVolumeStatic* VolumeStatic = static_cast<UVdbVolumeStatic*>(VdbVolume);
+		return TReadVectorGrid<T, UVdbVolumeStatic>(VolumeStatic, FrameIndex, VolumeTex, IndexSize, IndexMin, TexSize);
+	}
 }
 
 /**
@@ -128,7 +158,9 @@ UObject* UVdbToVolumeTextureFactory::FactoryCreateNew(UClass* Class, UObject* In
 
 	if (InitialVdbVolume && InitialVdbVolume->IsValid())
 	{
-		const nanovdb::GridMetaData* MetaData = InitialVdbVolume->GetMetaData();
+		InitialVdbVolume->ForceStreaming(FrameIndex);
+
+		const nanovdb::GridMetaData* MetaData = InitialVdbVolume->GetMetaData(FrameIndex);
 		const nanovdb::BBox<nanovdb::Vec3R>& IndexBBox = MetaData->indexBBox();
 
 		FIntVector IndexMin = FIntVector(IndexBBox.min()[0], IndexBBox.min()[1], IndexBBox.min()[2]);
@@ -170,25 +202,25 @@ UObject* UVdbToVolumeTextureFactory::FactoryCreateNew(UClass* Class, UObject* In
 		switch(MetaData->gridType())
 			{
 		case nanovdb::GridType::Float:
-			Success = ReadTypedGrid<float>(InitialVdbVolume, NewVolumeTexture, IndexSize, IndexMin, TexSize);
+			Success = ReadTypedGrid<float>(InitialVdbVolume, FrameIndex, NewVolumeTexture, IndexSize, IndexMin, TexSize);
 			break;
 		case nanovdb::GridType::Fp4:
-			Success = ReadTypedGrid<nanovdb::Fp4>(InitialVdbVolume, NewVolumeTexture, IndexSize, IndexMin, TexSize);
+			Success = ReadTypedGrid<nanovdb::Fp4>(InitialVdbVolume, FrameIndex, NewVolumeTexture, IndexSize, IndexMin, TexSize);
 			break;
 		case nanovdb::GridType::Fp8:
-			Success = ReadTypedGrid<nanovdb::Fp8>(InitialVdbVolume, NewVolumeTexture, IndexSize, IndexMin, TexSize);
+			Success = ReadTypedGrid<nanovdb::Fp8>(InitialVdbVolume, FrameIndex, NewVolumeTexture, IndexSize, IndexMin, TexSize);
 			break;
 		case nanovdb::GridType::Fp16:
-			Success = ReadTypedGrid<nanovdb::Fp16>(InitialVdbVolume, NewVolumeTexture, IndexSize, IndexMin, TexSize);
+			Success = ReadTypedGrid<nanovdb::Fp16>(InitialVdbVolume, FrameIndex, NewVolumeTexture, IndexSize, IndexMin, TexSize);
 			break;
 		case nanovdb::GridType::FpN:
-			Success = ReadTypedGrid<nanovdb::FpN>(InitialVdbVolume, NewVolumeTexture, IndexSize, IndexMin, TexSize);
+			Success = ReadTypedGrid<nanovdb::FpN>(InitialVdbVolume, FrameIndex, NewVolumeTexture, IndexSize, IndexMin, TexSize);
 			break;
 		case nanovdb::GridType::Vec3f:
-			Success = ReadVectorGrid<nanovdb::Vec3f>(InitialVdbVolume, NewVolumeTexture, IndexSize, IndexMin, TexSize);
+			Success = ReadVectorGrid<nanovdb::Vec3f>(InitialVdbVolume, FrameIndex, NewVolumeTexture, IndexSize, IndexMin, TexSize);
 			break;
 		case nanovdb::GridType::Vec4f:
-			Success = ReadVectorGrid<nanovdb::Vec4f>(InitialVdbVolume, NewVolumeTexture, IndexSize, IndexMin, TexSize);
+			Success = ReadVectorGrid<nanovdb::Vec4f>(InitialVdbVolume, FrameIndex, NewVolumeTexture, IndexSize, IndexMin, TexSize);
 			break;
 		default:
 			break;

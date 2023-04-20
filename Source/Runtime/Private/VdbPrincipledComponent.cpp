@@ -43,7 +43,8 @@ void UVdbPrincipledComponent::SetVdbAssets(UVdbAssetComponent* Comp)
 
 FPrimitiveSceneProxy* UVdbPrincipledComponent::CreateSceneProxy()
 {
-	if (!VdbAssets->DensityVolume || !VdbAssets->DensityVolume->IsValid() || VdbAssets->DensityVolume->IsVectorGrid())
+	const UVdbVolumeBase* MainVolume = VdbAssets->GetMainVolume();
+	if (!MainVolume || !MainVolume->IsValid() || MainVolume->IsVectorGrid())
 		return nullptr;
 
 	return new FVdbPrincipledSceneProxy(VdbAssets, this);
@@ -51,9 +52,9 @@ FPrimitiveSceneProxy* UVdbPrincipledComponent::CreateSceneProxy()
 
 FBoxSphereBounds UVdbPrincipledComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
-	if (VdbAssets->DensityVolume != nullptr)
+	if (VdbAssets->GetMainVolume() != nullptr)
 	{
-		FBoxSphereBounds VdbBounds(VdbAssets->DensityVolume->GetGlobalBounds());
+		FBoxSphereBounds VdbBounds(VdbAssets->GetMainVolume()->GetGlobalBounds());
 		return VdbBounds.TransformBy(LocalToWorld);
 	}
 	else
@@ -70,13 +71,13 @@ void UVdbPrincipledComponent::UpdateSceneProxy(uint32 FrameIndex)
 		return;
 	}
 
-	UVdbVolumeSequence* DensitySequence = (UVdbVolumeSequence*)VdbAssets->DensityVolume;
+	UVdbVolumeSequence* DensitySequence = (UVdbVolumeSequence*)VdbAssets->GetDensityVolume();
 	const FVolumeRenderInfos* RenderInfosDensity = DensitySequence->GetRenderInfos(FrameIndex);
 
-	UVdbVolumeSequence* TemperatureSequence = (UVdbVolumeSequence*)VdbAssets->TemperatureVolume;
+	UVdbVolumeSequence* TemperatureSequence = (UVdbVolumeSequence*)VdbAssets->GetTemperatureVolume();
 	const FVolumeRenderInfos* RenderInfosTemperature = TemperatureSequence ? TemperatureSequence->GetRenderInfos(FrameIndex) : nullptr;
 
-	UVdbVolumeSequence* ColorSequence = (UVdbVolumeSequence*)VdbAssets->ColorVolume;
+	UVdbVolumeSequence* ColorSequence = (UVdbVolumeSequence*)VdbAssets->GetColorVolume();
 	const FVolumeRenderInfos* RenderInfosColor = ColorSequence ? ColorSequence->GetRenderInfos(FrameIndex) : nullptr;
 
 	if (RenderInfosDensity)

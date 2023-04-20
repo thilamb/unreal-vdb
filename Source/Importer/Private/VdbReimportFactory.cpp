@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "VdbReimportFactory.h"
-#include "VdbVolumeBase.h"
+#include "VdbVolumeAsset.h"
 
 #include "HAL/FileManager.h"
 #include "EditorFramework\AssetImportData.h"
@@ -30,7 +30,7 @@ UVdbReimportFactory::UVdbReimportFactory(const FObjectInitializer& ObjectInitial
 
 bool UVdbReimportFactory::CanReimport(UObject* Obj, TArray<FString>& OutFilenames)
 {
-	UVdbVolumeBase* VdbVolume = Cast<UVdbVolumeBase>(Obj);
+	UVdbVolumeAsset* VdbVolume = Cast<UVdbVolumeAsset>(Obj);
 	if (VdbVolume && VdbVolume->GetAssetImportData())
 	{
 		VdbVolume->GetAssetImportData()->ExtractFilenames(OutFilenames);
@@ -41,7 +41,7 @@ bool UVdbReimportFactory::CanReimport(UObject* Obj, TArray<FString>& OutFilename
 
 void UVdbReimportFactory::SetReimportPaths(UObject* Obj, const TArray<FString>& NewReimportPaths)
 {
-	UVdbVolumeBase* VdbVolume = Cast<UVdbVolumeBase>(Obj);
+	UVdbVolumeAsset* VdbVolume = Cast<UVdbVolumeAsset>(Obj);
 	if (VdbVolume && VdbVolume->GetAssetImportData() && ensure(NewReimportPaths.Num() == 1))
 	{
 		VdbVolume->GetAssetImportData()->UpdateFilenameOnly(NewReimportPaths[0]);
@@ -50,7 +50,7 @@ void UVdbReimportFactory::SetReimportPaths(UObject* Obj, const TArray<FString>& 
 
 EReimportResult::Type UVdbReimportFactory::Reimport(UObject* Obj)
 {
-	UVdbVolumeBase* VdbVolume = Cast<UVdbVolumeBase>(Obj);
+	UVdbVolumeAsset* VdbVolume = Cast<UVdbVolumeAsset>(Obj);
 	if (!VdbVolume)
 	{
 		return EReimportResult::Failed;

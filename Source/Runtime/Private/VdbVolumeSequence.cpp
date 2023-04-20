@@ -421,9 +421,14 @@ void UVdbVolumeSequence::AddFrame(nanovdb::GridHandle<>& NanoGridHandle, EQuanti
 
 void UVdbVolumeSequence::FinalizeImport(const FString& Filename)
 {
-	AssetImportData->Update(Filename);
 	MemoryUsageStr = *GetMemoryString(MemoryUsage, false);
 
 	PrepareRendering();
+}
+
+void UVdbVolumeSequence::ForceStreaming(uint32 FrameIndex)
+{
+	const uint32 IndexFirstChunk = GetChunkIndexFromFrameIndex(FrameIndex);
+	IVolumeStreamingManager::Get().ForceStreamingChunk(this, IndexFirstChunk);
 }
 #endif

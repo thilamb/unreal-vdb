@@ -83,13 +83,13 @@ void UVdbMaterialComponent::UpdateSceneProxy(uint32 FrameIndex)
 		return;
 	}
 
-	UVdbVolumeSequence* DensitySequence = Cast<UVdbVolumeSequence>(VdbAssets->DensityVolume);
+	UVdbVolumeSequence* DensitySequence = Cast<UVdbVolumeSequence>(VdbAssets->GetDensityVolume());
 	const FVolumeRenderInfos* RenderInfosDensity = DensitySequence ? DensitySequence->GetRenderInfos(FrameIndex) : nullptr;
 
-	UVdbVolumeSequence* TemperatureSequence = Cast<UVdbVolumeSequence>(VdbAssets->TemperatureVolume);
+	UVdbVolumeSequence* TemperatureSequence = Cast<UVdbVolumeSequence>(VdbAssets->GetTemperatureVolume());
 	const FVolumeRenderInfos* RenderInfosTemperature = TemperatureSequence ? TemperatureSequence->GetRenderInfos(FrameIndex) : nullptr;
 
-	UVdbVolumeSequence* ColorSequence = Cast<UVdbVolumeSequence>(VdbAssets->ColorVolume);
+	UVdbVolumeSequence* ColorSequence = Cast<UVdbVolumeSequence>(VdbAssets->GetColorVolume());
 	const FVolumeRenderInfos* RenderInfosColor = ColorSequence ? ColorSequence->GetRenderInfos(FrameIndex) : nullptr;
 
 	const FVolumeRenderInfos* MainRenderInfosDensity = RenderInfosDensity ? RenderInfosDensity : RenderInfosTemperature;

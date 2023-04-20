@@ -24,15 +24,6 @@ struct FVolumeFrameData;
 class IInterface_StreamableVolumetricAsset;
 class IInterface_StreamableVolumetricAssetOwner;
 
-/**
-* Contains a request to load chunks of a volumetric animation
-*/
-struct FVolumeLoadChunksRequest
-{
-	TArray<uint32>	RequiredIndices;
-	bool			bPrioritiseRequest;
-};
-
 class IInterface_StreamableVolumetricAsset
 {
 public:
@@ -121,6 +112,9 @@ VOLUMESTREAMER_API struct IVolumeStreamingManager : public IStreamingManager
 	* @param ChunkIndex	Index of the chunk we want
 	*/
 	virtual void UnmapChunk(const IInterface_StreamableVolumetricAsset* Volume, uint32 ChunkIndex) = 0;
+
+	/* Forces streaming and loading of asset data at the given chunk index. */
+	virtual void ForceStreamingChunk(const IInterface_StreamableVolumetricAsset* Volume, uint32 ChunkIndex) = 0;
 
 	FThreadSafeCounter IoBandwidth;
 	mutable FCriticalSection CriticalSection;

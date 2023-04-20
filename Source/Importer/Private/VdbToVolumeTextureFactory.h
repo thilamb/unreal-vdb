@@ -26,8 +26,8 @@ class UVdbToVolumeTextureFactory : public UFactory
 	GENERATED_UCLASS_BODY()
 
 	/** An initial texture to assign to the newly created volume texture */
-	UPROPERTY()
-	TObjectPtr<class UVdbVolumeStatic> InitialVdbVolume;
+	class UVdbVolumeBase* InitialVdbVolume;
+	uint32 FrameIndex = 0;
 
 	//~ Begin UFactory Interface
 	virtual FText GetDisplayName() const override;

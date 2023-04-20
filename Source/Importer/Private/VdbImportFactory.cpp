@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "VdbImportFactory.h"
+#include "VdbVolumeAsset.h"
 #include "VdbVolumeStatic.h"
 #include "VdbVolumeSequence.h"
 #include "VdbImporterOptions.h"
@@ -95,15 +96,20 @@ UVdbImportFactory::UVdbImportFactory(const FObjectInitializer& ObjectInitializer
 	Formats.Add(TEXT("nvdb;NanoVDB format"));
 }
 
+FText UVdbImportFactory::GetDisplayName() const
+{
+	return LOCTEXT("VdbFactoryDescription", "OpenVDB volumes");
+}
+
 bool UVdbImportFactory::DoesSupportClass(UClass* Class)
 {
-	return (Class == UVdbVolumeStatic::StaticClass() || Class == UVdbVolumeSequence::StaticClass());
+	return Class == UVdbVolumeAsset::StaticClass();
 }
 
 UClass* UVdbImportFactory::ResolveSupportedClass()
 {
 	// It's ok to ignore UVdbVolumeSequence, the important thing is to have "SupportedClass == nullptr" and to implement "DoesSupportClass" properly
-	return UVdbVolumeStatic::StaticClass();
+	return UVdbVolumeAsset::StaticClass();
 }
 
 nanovdb::GridType ToGridType(EQuantizationType Type)
@@ -174,6 +180,8 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 		}
 	}
 
+	UVdbVolumeAsset* VdbAsset = NewObject<UVdbVolumeAsset>(InParent, UVdbVolumeAsset::StaticClass(), InName, Flags);
+
 	TArray<UObject*> ResultAssets;
 	if (!bOutOperationCanceled)
 	{
@@ -197,27 +205,10 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 				if (GridInfo->ShouldImport)
 				{
 					TArray<uint8> StreamedDataTempBytes;
-
-					FString SequenceName = InName.ToString();
-					{
-						int32 IndexLastUnderscore;
-						if (SequenceName.FindLastChar('_', IndexLastUnderscore) && !SequenceName.Contains("_seq"))
-						{
-							SequenceName = SequenceName.LeftChop(SequenceName.Len() - IndexLastUnderscore);
-							if (GridsInfo.Num() > 1) 
-							{
-								SequenceName += "_seq_" + GridInfo->GridName.ToString();
-							}
-							else
-							{
-								SequenceName += "_seq";
-							}
-						}
-					}
 			
 					FString VdbPath = FPaths::GetPath(Filename) + "\\";
-					FName SequenceFName(SequenceName);
-					UVdbVolumeSequence* VolumeSequence = NewObject<UVdbVolumeSequence>(InParent, UVdbVolumeSequence::StaticClass(), SequenceFName, Flags);			
+					FName NewName(GridInfo->GridName.ToString());
+					UVdbVolumeSequence* VolumeSequence = NewObject<UVdbVolumeSequence>(VdbAsset, UVdbVolumeSequence::StaticClass(), NewName, Flags);
 
 					for (int32 VDBFileIndex = 0; VDBFileIndex < SortedVBDFilenames.Num(); VDBFileIndex++)
 					{
@@ -274,6 +265,8 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 
 					VolumeSequence->FinalizeImport(Filename);
 					ResultAssets.Add(VolumeSequence);
+					VdbAsset->GetAssetImportData()->Update(Filename);
+					VdbAsset->VdbVolumes.Add(VolumeSequence);
 				}
 			}
 		}
@@ -289,15 +282,13 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 
 					if (gridHandle)
 					{
-						FName NewName(InName.ToString() + "_" + GridInfo->GridName.ToString());
+						FName NewName(GridInfo->GridName.ToString());
+						UVdbVolumeStatic* VolumeStatic = NewObject<UVdbVolumeStatic>(VdbAsset, UVdbVolumeStatic::StaticClass(), NewName, Flags);
+						VolumeStatic->Import(MoveTemp(gridHandle), ImporterOptions->Quantization, GridInfo);
+						VdbAsset->GetAssetImportData()->Update(Filename);
+						VdbAsset->VdbVolumes.Add(VolumeStatic);
 
-						bool UseNewName = GridsInfo.Num() > 1 && !InName.ToString().Contains(GridInfo->GridName.ToString());
-
-						UVdbVolumeStatic* Vol = NewObject<UVdbVolumeStatic>(InParent, UVdbVolumeStatic::StaticClass(), UseNewName ? NewName : InName, Flags);
-						Vol->Import(MoveTemp(gridHandle), ImporterOptions->Quantization, GridInfo);
-						Vol->GetAssetImportData()->Update(Filename);
-
-						ResultAssets.Add(Vol);
+						ResultAssets.Add(VolumeStatic);
 					}
 				}
 			}
@@ -316,7 +307,7 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 		}
 	}
 
-	return (ResultAssets.Num() > 0) ? ResultAssets[0] : nullptr;
+	return VdbAsset;
 }
 
 bool UVdbImportFactory::FactoryCanImport(const FString& Filename)

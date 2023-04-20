@@ -56,6 +56,7 @@ struct FVolumeStreamingManager : public IVolumeStreamingManager
 	bool IsManagedComponent(const IInterface_StreamableVolumetricAssetOwner* AssetOwner) const;
 	const uint8* MapChunk(const IInterface_StreamableVolumetricAsset* Volume, uint32 ChunkIndex, bool AllowChunkToBeUnloaded, uint32* OutChunkSize = nullptr);
 	void UnmapChunk(const IInterface_StreamableVolumetricAsset* Volume, uint32 ChunkIndex);
+	void ForceStreamingChunk(const IInterface_StreamableVolumetricAsset* Volume, uint32 ChunkIndex);
 	// End IVolumeStreamingManager interface
 
 private:
@@ -321,6 +322,18 @@ void FVolumeStreamingManager::UnmapChunk(const IInterface_StreamableVolumetricAs
 	if (data)
 	{
 		(*data)->UnmapChunk(ChunkIndex);
+	}
+}
+
+void FVolumeStreamingManager::ForceStreamingChunk(const IInterface_StreamableVolumetricAsset* Volume, uint32 ChunkIndex)
+{
+	FStreamingVolumeData** DataPtr = StreamingVolumes.Find(Volume);
+	if (DataPtr)
+	{
+		FStreamingVolumeData* StreamingAnimData = *DataPtr;
+		StreamingAnimData->AddNeededChunk(ChunkIndex);
+		StreamingAnimData->UpdateStreamingStatus();
+		StreamingAnimData->BlockTillAllRequestsFinished();
 	}
 }
 

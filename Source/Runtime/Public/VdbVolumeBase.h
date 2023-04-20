@@ -49,9 +49,7 @@ public:
 	// We only support Volume with cubic voxels (same dimension in all axes)
 	float GetVoxelSize() const { return VoxelSize.X; }
 	int GetMemorySize() const { return MemoryUsage; }
-#if WITH_EDITORONLY_DATA
-	class UAssetImportData* GetAssetImportData() { return AssetImportData; }
-#endif
+	FString GetType() const;
 
 	void UpdateFromMetadata(const nanovdb::GridMetaData* MetaData);
 
@@ -65,10 +63,15 @@ public:
 	virtual const uint8* GetGridData(uint32 FrameIndex) const PURE_VIRTUAL(UVdbVolumeBase::GetGridData, return nullptr;);
 	virtual const nanovdb::GridMetaData* GetMetaData(uint32 FrameIndex) PURE_VIRTUAL(UVdbVolumeBase::GetGridData, return nullptr;);
 
+#if WITH_EDITOR
+	virtual void ForceStreaming(uint32 FrameIndex) {}
+#endif
+
 	// UObject Interface.
 	virtual void PostInitProperties() override;
+
 #if WITH_EDITORONLY_DATA
-	virtual void GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) const override;
+	FString GetGridName() const { return GridName; }
 #endif
 
 protected:
@@ -77,9 +80,6 @@ protected:
 	EVdbClass VdbClass;
 
 #if WITH_EDITORONLY_DATA
-	UPROPERTY(BlueprintReadOnly, Instanced, Category = ImportSettings)
-	TObjectPtr<class UAssetImportData> AssetImportData;
-
 	UPROPERTY(VisibleAnywhere, Category = "Properties")
 	FString GridName;
 

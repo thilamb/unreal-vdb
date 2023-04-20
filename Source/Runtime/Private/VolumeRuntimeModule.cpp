@@ -14,6 +14,7 @@
 
 #include "VolumeRuntimeModule.h"
 #include "VdbCommon.h"
+#include "VdbAssetComponentDetailsCustomization.h"
 #include "Rendering/VdbMaterialRendering.h"
 #include "Rendering/VdbPrincipledRendering.h"
 
@@ -31,6 +32,7 @@ void FVolumeRuntimeModule::StartupModule()
 	AddShaderSourceDirectoryMapping(TEXT("/Plugin/VdbVolume"), PluginShaderDir);
 
 	RegisterVolumeTrackHandler(&VdbVolumeSequenceTrackHandler);
+	RegisterDetailsCustomizations();
 }
 
 void FVolumeRuntimeModule::ShutdownModule()
@@ -49,6 +51,20 @@ FVolumeRuntimeModule::TRenderExtensionPtr FVolumeRuntimeModule::GetRenderExtensi
 	static const FName ModuleName = "VolumeRuntime";
 	auto& ModuleInterface = FModuleManager::LoadModuleChecked<FVolumeRuntimeModule>(ModuleName);
 	return ModuleInterface.GetOrCreateRenderExtension(DefaultRenderTarget);
+}
+
+void FVolumeRuntimeModule::RegisterDetailsCustomizations()
+{
+	auto& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+
+	// Register our customization to be used by a class 'UMyClass' or 'AMyClass'. Note the prefix must be dropped.
+	PropertyModule.RegisterCustomClassLayout(
+		"VdbAssetComponent",
+		FOnGetDetailCustomizationInstance::CreateStatic(&FVdbAssetComponentDetails::MakeInstance)
+	);
+
+	PropertyModule.NotifyCustomizationModuleChanged();
+
 }
 
 FVolumeRuntimeModule::TRenderExtensionPtr FVolumeRuntimeModule::GetOrCreateRenderExtension(UTextureRenderTarget2D* DefaultRenderTarget)
