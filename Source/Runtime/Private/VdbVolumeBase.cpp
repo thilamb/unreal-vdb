@@ -85,3 +85,13 @@ void UVdbVolumeBase::UpdateFromMetadata(const nanovdb::GridMetaData* MetaData)
 	MemoryUsageStr = *GetMemoryString(MemoryUsage, false);
 #endif
 }
+
+FString UVdbVolumeBase::GetType() const
+{
+#if WITH_EDITORONLY_DATA
+	return DataType;
+#else
+	return "";
+#endif
+
+}

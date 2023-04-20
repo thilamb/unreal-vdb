@@ -106,9 +106,9 @@ void UVdbToVolumeTextureComponent::CopyVdbToVolume_GameThread(uint32 FrameIndex)
 
 	UpdateRenderTargetIfNeeded();
 
-	const FVolumeRenderInfos* RenderInfosPrimary = VdbAssets->GetRenderInfos(VdbAssets->DensityVolume); // FLOAT
-	const FVolumeRenderInfos* RenderInfosSecondary = VdbAssets->GetRenderInfos(VdbAssets->TemperatureVolume); // FLOAT
-	const FVolumeRenderInfos* RenderInfosTertiary = VdbAssets->GetRenderInfos(VdbAssets->ColorVolume); // VECTOR3
+	const FVolumeRenderInfos* RenderInfosPrimary = VdbAssets->GetRenderInfos(VdbAssets->GetDensityVolume()); // FLOAT
+	const FVolumeRenderInfos* RenderInfosSecondary = VdbAssets->GetRenderInfos(VdbAssets->GetTemperatureVolume()); // FLOAT
+	const FVolumeRenderInfos* RenderInfosTertiary = VdbAssets->GetRenderInfos(VdbAssets->GetColorVolume()); // VECTOR3
 
 	const FVolumeRenderInfos* FirstRenderInfos = nullptr;
 	const FVolumeRenderInfos* SecondRenderInfos = nullptr;
@@ -125,7 +125,7 @@ void UVdbToVolumeTextureComponent::CopyVdbToVolume_GameThread(uint32 FrameIndex)
 			}
 			if (RenderInfosPrimary->IsVectorGrid())
 			{
-				UE_LOG(LogSparseVolumetrics, Error, TEXT("UVdbToVolumeTextureComponent: Trying to use a VectorGrid as a FloatGrid (%s)."), *VdbAssets->DensityVolume->GetName());
+				UE_LOG(LogSparseVolumetrics, Error, TEXT("UVdbToVolumeTextureComponent: Trying to use a VectorGrid as a FloatGrid (%s)."), *VdbAssets->GetDensityVolume()->GetName());
 				return;
 			}
 			FirstRenderInfos = RenderInfosPrimary;
@@ -141,7 +141,7 @@ void UVdbToVolumeTextureComponent::CopyVdbToVolume_GameThread(uint32 FrameIndex)
 			}
 			if (!RenderInfosTertiary->IsVectorGrid())
 			{
-				UE_LOG(LogSparseVolumetrics, Error, TEXT("UVdbToVolumeTextureComponent: Trying to use %s as VectorGrid but it is a FloatGrid."), *VdbAssets->ColorVolume->GetName());
+				UE_LOG(LogSparseVolumetrics, Error, TEXT("UVdbToVolumeTextureComponent: Trying to use %s as VectorGrid but it is a FloatGrid."), *VdbAssets->GetColorVolume()->GetName());
 				return;
 			}
 			FirstRenderInfos = RenderInfosTertiary;
@@ -157,7 +157,7 @@ void UVdbToVolumeTextureComponent::CopyVdbToVolume_GameThread(uint32 FrameIndex)
 			}
 			if (RenderInfosPrimary->IsVectorGrid() || RenderInfosSecondary->IsVectorGrid())
 			{
-				UE_LOG(LogSparseVolumetrics, Error, TEXT("UVdbToVolumeTextureComponent: Trying to use a VectorGrid as a FloatGrid (either %s or %s)."), *VdbAssets->DensityVolume->GetName(), *VdbAssets->TemperatureVolume->GetName());
+				UE_LOG(LogSparseVolumetrics, Error, TEXT("UVdbToVolumeTextureComponent: Trying to use a VectorGrid as a FloatGrid (either %s or %s)."), *VdbAssets->GetDensityVolume()->GetName(), *VdbAssets->GetTemperatureVolume()->GetName());
 				return;
 			}
 			FirstRenderInfos = RenderInfosPrimary;
@@ -174,7 +174,7 @@ void UVdbToVolumeTextureComponent::CopyVdbToVolume_GameThread(uint32 FrameIndex)
 			}
 			if (RenderInfosPrimary->IsVectorGrid() || !RenderInfosTertiary->IsVectorGrid())
 			{
-				UE_LOG(LogSparseVolumetrics, Error, TEXT("UVdbToVolumeTextureComponent: Density Volume %s should be a FloatGrid and Color Volume %s should be a VectorGrid."), *VdbAssets->DensityVolume->GetName(), *VdbAssets->ColorVolume->GetName());
+				UE_LOG(LogSparseVolumetrics, Error, TEXT("UVdbToVolumeTextureComponent: Density Volume %s should be a FloatGrid and Color Volume %s should be a VectorGrid."), *VdbAssets->GetDensityVolume()->GetName(), *VdbAssets->GetColorVolume()->GetName());
 				return;
 			}
 			FirstRenderInfos = RenderInfosPrimary;
@@ -190,7 +190,7 @@ void UVdbToVolumeTextureComponent::CopyVdbToVolume_GameThread(uint32 FrameIndex)
 		SecondaryVol = SecondRenderInfos ? SecondRenderInfos->GetRenderResource() : nullptr,
 		VolumeOffset = RenderInfosPrimary->GetIndexMin(),
 		VolumeSize = RenderInfosPrimary->GetIndexSize(),
-		TextureSize = VdbAssets->DensityVolume->GetLargestVolume()]
+		TextureSize = VdbAssets->GetDensityVolume()->GetLargestVolume()]
 	(FRHICommandListImmediate& RHICmdList)
 	{
 		CopyVdbToVolume_RenderThread(RHICmdList, RenderTarget, PrimaryVol, SecondaryVol, VolumeOffset, VolumeSize, TextureSize);
@@ -261,9 +261,9 @@ EPixelFormat GetPixelFormat(EVdbToVolumeMethod Method)
 
 void UVdbToVolumeTextureComponent::UpdateRenderTargetIfNeeded(bool Force)
 {
-	if (VolumeRenderTarget && VdbAssets && VdbAssets->DensityVolume)
+	if (VolumeRenderTarget && VdbAssets && VdbAssets->GetDensityVolume())
 	{
-		const FIntVector& MaxSize = VdbAssets->DensityVolume->GetLargestVolume();
+		const FIntVector& MaxSize = VdbAssets->GetDensityVolume()->GetLargestVolume();
 
 		EPixelFormat PixelFormat = GetPixelFormat(Method);
 		if (Force || 

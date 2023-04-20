@@ -39,7 +39,7 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 
 	VdbMaterialRenderExtension = FVolumeRuntimeModule::GetRenderExtension(InComponent->RenderTarget);
 
-	const FVolumeRenderInfos* PrimaryRenderInfos = AssetComponent->GetRenderInfos(AssetComponent->DensityVolume);
+	const FVolumeRenderInfos* PrimaryRenderInfos = AssetComponent->GetRenderInfos(AssetComponent->GetDensityVolume());
 	DensityRenderBuffer = PrimaryRenderInfos ? PrimaryRenderInfos->GetRenderResource() : nullptr;
 
 	IndexMin = PrimaryRenderInfos->GetIndexMin();
@@ -58,19 +58,19 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 
 	CustomIntData0 = FIntVector4(InComponent->MaxRayDepth, InComponent->SamplesPerPixel, InComponent->ColoredTransmittance, InComponent->TemporalNoise);
 	CustomIntData1 = FIntVector4(CurveIndex, int32(AtlasHeight), TranslucentLevelSet, 0);
-	float VoxelSize = AssetComponent->DensityVolume->GetVoxelSize();
+	float VoxelSize = AssetComponent->GetDensityVolume()->GetVoxelSize();
 	CustomFloatData0 = FVector4f(InComponent->LocalStepSize, InComponent->ShadowStepSizeMultiplier, VoxelSize, InComponent->Jittering);
 	CustomFloatData1 = FVector4f(InComponent->Anisotropy, InComponent->Albedo, InComponent->BlackbodyIntensity, (CurveIndex == INDEX_NONE) ? InComponent->BlackbodyTemperature : InComponent->TemperatureMultiplier);
 	CustomFloatData2 = FVector4f(InComponent->DensityMultiplier, InComponent->VolumePadding, InComponent->Ambient, InComponent->ShadowThreshold);
 
-	auto FillValue = [AssetComponent](UVdbVolumeBase* Base, FVdbRenderBuffer*& Buffer)
+	auto FillValue = [AssetComponent](const UVdbVolumeBase* Base, FVdbRenderBuffer*& Buffer)
 	{
 		const FVolumeRenderInfos* RenderInfos = AssetComponent->GetRenderInfos(Base);
 		Buffer = RenderInfos ? RenderInfos->GetRenderResource() : nullptr;
 	};
 
-	FillValue(AssetComponent->TemperatureVolume, TemperatureRenderBuffer);
-	FillValue(AssetComponent->ColorVolume, ColorRenderBuffer);
+	FillValue(AssetComponent->GetTemperatureVolume(), TemperatureRenderBuffer);
+	FillValue(AssetComponent->GetColorVolume(), ColorRenderBuffer);
 
 	bCastDynamicShadow = true;
 }

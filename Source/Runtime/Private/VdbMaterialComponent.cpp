@@ -54,7 +54,8 @@ void UVdbMaterialComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMat
 
 FPrimitiveSceneProxy* UVdbMaterialComponent::CreateSceneProxy()
 {
-	if (!VdbAssets->DensityVolume || !VdbAssets->DensityVolume->IsValid() || VdbAssets->DensityVolume->IsVectorGrid() || !GetMaterial(0))
+	UVdbVolumeBase* Volume = VdbAssets->GetDensityVolume();
+	if (!Volume || !Volume->IsValid() || Volume->IsVectorGrid() || !GetMaterial(0))
 		return nullptr;
 
 	return new FVdbMaterialSceneProxy(VdbAssets, this);
@@ -62,9 +63,9 @@ FPrimitiveSceneProxy* UVdbMaterialComponent::CreateSceneProxy()
 
 FBoxSphereBounds UVdbMaterialComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
-	if (VdbAssets->DensityVolume != nullptr)
+	if (UVdbVolumeBase* Volume = VdbAssets->GetDensityVolume())
 	{
-		FBoxSphereBounds VdbBounds(VdbAssets->DensityVolume->GetGlobalBounds());
+		FBoxSphereBounds VdbBounds(Volume->GetGlobalBounds());
 		return VdbBounds.TransformBy(LocalToWorld);
 	}
 	else
@@ -81,13 +82,13 @@ void UVdbMaterialComponent::UpdateSceneProxy(uint32 FrameIndex)
 		return;
 	}
 
-	UVdbVolumeSequence* DensitySequence = Cast<UVdbVolumeSequence>(VdbAssets->DensityVolume);
+	UVdbVolumeSequence* DensitySequence = Cast<UVdbVolumeSequence>(VdbAssets->GetDensityVolume());
 	const FVolumeRenderInfos* RenderInfosDensity = DensitySequence->GetRenderInfos(FrameIndex);
 
-	UVdbVolumeSequence* TemperatureSequence = Cast<UVdbVolumeSequence>(VdbAssets->TemperatureVolume);
+	UVdbVolumeSequence* TemperatureSequence = Cast<UVdbVolumeSequence>(VdbAssets->GetTemperatureVolume());
 	const FVolumeRenderInfos* RenderInfosTemperature = TemperatureSequence ? TemperatureSequence->GetRenderInfos(FrameIndex) : nullptr;
 
-	UVdbVolumeSequence* ColorSequence = Cast<UVdbVolumeSequence>(VdbAssets->ColorVolume);
+	UVdbVolumeSequence* ColorSequence = Cast<UVdbVolumeSequence>(VdbAssets->GetColorVolume());
 	const FVolumeRenderInfos* RenderInfosColor = ColorSequence ? ColorSequence->GetRenderInfos(FrameIndex) : nullptr;
 
 	if (RenderInfosDensity)

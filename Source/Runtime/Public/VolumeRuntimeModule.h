@@ -31,6 +31,8 @@ public:
 	static TRenderPrincipledPtr GetRenderPrincipledMgr(UTextureRenderTarget2D* DefaultRenderTarget);
 
 private:
+	void RegisterDetailsCustomzations();
+
 	TRenderExtensionPtr GetOrCreateRenderExtension(UTextureRenderTarget2D* DefaultRenderTarget);
 	TRenderPrincipledPtr GetOrCreateRenderPrincipledMgr(UTextureRenderTarget2D* DefaultRenderTarget);
 

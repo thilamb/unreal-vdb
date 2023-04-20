@@ -65,17 +65,17 @@ void UVdbSequenceComponent::SetVdbAssets(UVdbAssetComponent* Component)
 
 TObjectPtr<UVdbVolumeBase> UVdbSequenceComponent::GetPrimarySequence() const
 {
-	if (VdbAssets && VdbAssets->DensityVolume && VdbAssets->DensityVolume->IsSequence())
+	if (VdbAssets && VdbAssets->GetDensityVolume() && VdbAssets->GetDensityVolume()->IsSequence())
 	{
-		return VdbAssets->DensityVolume;
+		return VdbAssets->GetDensityVolume();
 	}
 	return nullptr;
 }
 const UVdbVolumeSequence* UVdbSequenceComponent::GetPrincipalSequence() const
 {
-	if (VdbAssets && VdbAssets->DensityVolume && VdbAssets->DensityVolume->IsSequence())
+	if (VdbAssets && VdbAssets->GetDensityVolume() && VdbAssets->GetDensityVolume()->IsSequence())
 	{
-		return Cast<const UVdbVolumeSequence>(VdbAssets->DensityVolume);
+		return Cast<const UVdbVolumeSequence>(VdbAssets->GetDensityVolume());
 	}
 	return nullptr;
 }
@@ -317,7 +317,7 @@ void UVdbSequenceComponent::UpdateIndicesOfChunksToStream(TArray<uint32>& Indice
 
 	if(bUpdateAsset)
 	{
-		VdbAssets->BroadcastFrameChanged(FrameIndexToStream);
+		VdbAssets->BroadcastFrameChanged(FrameIndexToStream, false);
 		IndexOfLastDisplayedFrame = FrameIndexToStream;
 	}
 
@@ -412,13 +412,13 @@ void UVdbSequenceComponent::OnChunkAvailable(uint32 ChunkId)
 	TRACE_CPUPROFILER_EVENT_SCOPE(VolAnim_UVdbSequenceComponent_OnChunkAvailable);
 
 	const UVdbVolumeSequence* VdbSequence = GetPrincipalSequence();
-	if (ManualTick && VdbAssets)
+	if (VdbAssets)
 	{
 		const uint32 FrameIndex = GetFrameIndexFromElapsedTime();
 		if (VdbSequence->GetChunkIndexFromFrameIndex(FrameIndex) == ChunkId && 
 			VdbSequence->IsGridDataInMemory(FrameIndex, true))
 		{
-			VdbAssets->BroadcastFrameChanged(FrameIndex);
+			VdbAssets->BroadcastFrameChanged(FrameIndex, true);
 			IndexOfLastDisplayedFrame = FrameIndex;
 		}
 	}

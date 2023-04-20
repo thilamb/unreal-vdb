@@ -16,10 +16,7 @@
 
 #include "VdbMaterialActor.h"
 #include "VdbAssetComponent.h"
-#include "VdbMaterialComponent.h"
-#include "VdbSequenceComponent.h"
-#include "VdbVolumeStatic.h"
-#include "VdbVolumeSequence.h"
+#include "VdbVolumeAsset.h"
 
 
 UActorFactoryVdbVolume::UActorFactoryVdbVolume(const FObjectInitializer& ObjectInitializer)
@@ -38,7 +35,7 @@ bool UActorFactoryVdbVolume::CanCreateActorFrom(const FAssetData& AssetData, FTe
 		return true;
 	}
 
-	if (!AssetData.GetClass()->IsChildOf(UVdbVolumeBase::StaticClass()))
+	if (!AssetData.GetClass()->IsChildOf(UVdbVolumeAsset::StaticClass()))
 	{
 		OutErrorMsg = FText::FromString("A valid UVdbVolume must be specified.");
 		return false;
@@ -51,14 +48,14 @@ void UActorFactoryVdbVolume::PostSpawnActor(UObject* Asset, AActor* NewActor)
 {
 	Super::PostSpawnActor(Asset, NewActor);
 
-	UVdbVolumeBase* VdbVolume = CastChecked<UVdbVolumeBase>(Asset);
+	UVdbVolumeAsset* VdbAsset = CastChecked<UVdbVolumeAsset>(Asset);
 
 	// Change properties
 	AVdbMaterialActor* VdbActor = CastChecked<AVdbMaterialActor>(NewActor);
 
 	UVdbAssetComponent* VdbMaterialComponent = VdbActor->GetVdbAssetComponent();
 	VdbMaterialComponent->UnregisterComponent();
-	VdbMaterialComponent->DensityVolume = VdbVolume;
+	VdbMaterialComponent->VdbAsset = VdbAsset;
 	VdbMaterialComponent->RegisterComponent();
 }
 
@@ -66,9 +63,9 @@ void UActorFactoryVdbVolume::PostCreateBlueprint(UObject* Asset, AActor* CDO)
 {
 	if (Asset != NULL && CDO != NULL)
 	{
-		UVdbVolumeBase* VdbVolume = CastChecked<UVdbVolumeBase>(Asset);
+		UVdbVolumeAsset* VdbAsset = CastChecked<UVdbVolumeAsset>(Asset);
 		AVdbMaterialActor* VdbActor = CastChecked<AVdbMaterialActor>(CDO);
 		UVdbAssetComponent* VdbMaterialComponent = VdbActor->GetVdbAssetComponent();
-		VdbMaterialComponent->DensityVolume = VdbVolume;
+		VdbMaterialComponent->VdbAsset = VdbAsset;
 	}
 }

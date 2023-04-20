@@ -16,6 +16,7 @@
 
 #include "VdbCommon.h"
 #include "VdbVolumeBase.h"
+#include "VdbVolumeAsset.h"
 
 #define LOCTEXT_NAMESPACE "VdbAssetComponent"
 
@@ -28,18 +29,26 @@ UVdbAssetComponent::~UVdbAssetComponent() {}
 TArray<const UVdbVolumeBase*> UVdbAssetComponent::GetConstVolumes() const
 { 
 	TArray<const UVdbVolumeBase*> Array;
-	if (DensityVolume) Array.Add(DensityVolume.Get());
-	if (TemperatureVolume) Array.Add(TemperatureVolume.Get());
-	if (ColorVolume) Array.Add(ColorVolume.Get());
+	if (VdbAsset)
+	{
+		for (auto& Grid : VdbAsset->VdbVolumes)
+		{
+			Array.Add(Grid);
+		}
+	}
 	return Array;
 }
 
 TArray<UVdbVolumeBase*> UVdbAssetComponent::GetVolumes()
 {
 	TArray<UVdbVolumeBase*> Array;
-	if (DensityVolume) Array.Add(DensityVolume.Get());
-	if (TemperatureVolume) Array.Add(TemperatureVolume.Get());
-	if (ColorVolume) Array.Add(ColorVolume.Get());
+	if (VdbAsset)
+	{
+		for (auto& Grid : VdbAsset->VdbVolumes)
+		{
+			Array.Add(Grid);
+		}
+	}
 	return Array;
 }
 
@@ -65,9 +74,9 @@ const FVolumeRenderInfos* UVdbAssetComponent::GetRenderInfos(const UVdbVolumeBas
 
 EVdbClass UVdbAssetComponent::GetVdbClass() const
 {
-	if (DensityVolume != nullptr)
+	if (VdbAsset && !VdbAsset->VdbVolumes.IsEmpty())
 	{
-		return DensityVolume->GetVdbClass();
+		return VdbAsset->VdbVolumes[0]->GetVdbClass();
 	}
 	else
 	{
@@ -75,89 +84,128 @@ EVdbClass UVdbAssetComponent::GetVdbClass() const
 	}
 }
 
-void UVdbAssetComponent::BroadcastFrameChanged(uint32 Frame)
+void UVdbAssetComponent::BroadcastFrameChanged(uint32 Frame, bool Force)
 {
-	if (CurrFrameIndex != Frame)
+	if (Force || (CurrFrameIndex != Frame))
 	{
 		CurrFrameIndex = Frame;
 		TargetFrameIndex = CurrFrameIndex;
 		OnFrameChanged.Broadcast(Frame);
-		OnVdbChanged.Broadcast((int32)Frame);
 	}
 }
 
 void UVdbAssetComponent::GetReferencedContentObjects(TArray<UObject*>& Objects) const
 {
-	if (DensityVolume)
+	for (auto& Grid : VdbAsset->VdbVolumes)
 	{
-		Objects.Add(DensityVolume.Get());
-	}
-	if (TemperatureVolume)
-	{
-		Objects.Add(TemperatureVolume.Get());
-	}
-	if (ColorVolume)
-	{
-		Objects.Add(ColorVolume.Get());
+		Objects.Add(Grid);
 	}
 }
 
 FVector3f UVdbAssetComponent::GetVolumeSize() const
 {
-	if (DensityVolume)
+	if (VdbAsset && !VdbAsset->VdbVolumes.IsEmpty())
 	{
-		return FVector3f(DensityVolume->GetBounds(TargetFrameIndex).GetSize());
+		return FVector3f(VdbAsset->VdbVolumes[0]->GetBounds(TargetFrameIndex).GetSize());
 	}
 	return FVector3f::OneVector;
 }
 
 FVector3f UVdbAssetComponent::GetVolumeOffset() const
 {
-	if (DensityVolume)
+	if (VdbAsset && !VdbAsset->VdbVolumes.IsEmpty())
 	{
-		return FVector3f(DensityVolume->GetBounds(TargetFrameIndex).Min);
+		return FVector3f(VdbAsset->VdbVolumes[0]->GetBounds(TargetFrameIndex).Min);
 	}
 	return FVector3f::ZeroVector;
 }
 
 FVector3f UVdbAssetComponent::GetVolumeUvScale() const
 {
-	if (DensityVolume)
+	if (VdbAsset && !VdbAsset->VdbVolumes.IsEmpty())
 	{
-		const FIntVector& LargestVolume = DensityVolume->GetLargestVolume();
-		const FVector3f& VolumeSize = DensityVolume->GetRenderInfos(TargetFrameIndex)->GetIndexSize();
+		UVdbVolumeBase* VdbVolume = VdbAsset->VdbVolumes[0];
+		const FIntVector& LargestVolume = VdbVolume->GetLargestVolume();
+		const FVector3f& VolumeSize = VdbVolume->GetRenderInfos(TargetFrameIndex)->GetIndexSize();
 
-		return FVector3f(	VolumeSize.X / (float)LargestVolume.X, 
-							VolumeSize.Y / (float)LargestVolume.Y,
-							VolumeSize.Z / (float)LargestVolume.Z);
+		return FVector3f(VolumeSize.X / (float)LargestVolume.X,
+			VolumeSize.Y / (float)LargestVolume.Y,
+			VolumeSize.Z / (float)LargestVolume.Z);
 	}
 	return FVector3f::OneVector;
 }
 
-#if WITH_EDITOR
-
-// Checks if we are inputing correct float volumes on float grids slots and vector volumes on vector grids slots.
-// Also checks if other volumes are compatible with the principal (and only mandatory) density volume.
-#define CHECK_VOLUMES_POST_EDIT(MemberName, CheckVector) \
-	if (PropertyName == GET_MEMBER_NAME_CHECKED(UVdbAssetComponent, MemberName)) \
-	{ \
-		if (MemberName && MemberName->IsVectorGrid() != CheckVector) \
-		{ \
-			MemberName = nullptr; \
-			if (CheckVector) { UE_LOG(LogSparseVolumetrics, Error, TEXT("UVdbAssetComponent: %s only accepts vector volumes."), TEXT(#MemberName)); } \
-			else { UE_LOG(LogSparseVolumetrics, Error, TEXT("UVdbAssetComponent: %s only accepts float volumes."), TEXT(#MemberName)); } \
-		} \
+UVdbVolumeBase* UVdbAssetComponent::GetDensityVolume()
+{
+	if (VdbAsset && DensityGridIndex >= 0 && DensityGridIndex < VdbAsset->VdbVolumes.Num())
+	{
+		UVdbVolumeBase* Volume = VdbAsset->VdbVolumes[DensityGridIndex];
+		return !Volume->IsVectorGrid() ? Volume : nullptr;
 	}
+	return nullptr;
+}
+const UVdbVolumeBase* UVdbAssetComponent::GetDensityVolume() const
+{
+	if (VdbAsset && DensityGridIndex >= 0 && DensityGridIndex < VdbAsset->VdbVolumes.Num())
+	{
+		UVdbVolumeBase* Volume = VdbAsset->VdbVolumes[DensityGridIndex];
+		return !Volume->IsVectorGrid() ? Volume : nullptr;
+	}
+	return nullptr;
+}
 
+UVdbVolumeBase* UVdbAssetComponent::GetTemperatureVolume()
+{
+	if (VdbAsset && TemperatureGridIndex >= 0 && TemperatureGridIndex < VdbAsset->VdbVolumes.Num())
+	{
+		UVdbVolumeBase* Volume = VdbAsset->VdbVolumes[TemperatureGridIndex];
+		return !Volume->IsVectorGrid() ? Volume : nullptr;
+	}
+	return nullptr;
+}
+const UVdbVolumeBase* UVdbAssetComponent::GetTemperatureVolume() const
+{
+	if (VdbAsset && TemperatureGridIndex >= 0 && TemperatureGridIndex < VdbAsset->VdbVolumes.Num())
+	{
+		UVdbVolumeBase* Volume = VdbAsset->VdbVolumes[TemperatureGridIndex];
+		return !Volume->IsVectorGrid() ? Volume : nullptr;
+	}
+	return nullptr;
+}
+
+UVdbVolumeBase* UVdbAssetComponent::GetColorVolume()
+{
+	if (VdbAsset && ColorGridIndex >= 0 && ColorGridIndex < VdbAsset->VdbVolumes.Num())
+	{
+		UVdbVolumeBase* Volume = VdbAsset->VdbVolumes[ColorGridIndex];
+		return Volume->IsVectorGrid() ? Volume : nullptr;
+	}
+	return nullptr;
+}
+const UVdbVolumeBase* UVdbAssetComponent::GetColorVolume() const
+{
+	if (VdbAsset && ColorGridIndex >= 0 && ColorGridIndex < VdbAsset->VdbVolumes.Num())
+	{
+		UVdbVolumeBase* Volume = VdbAsset->VdbVolumes[ColorGridIndex];
+		return Volume->IsVectorGrid() ? Volume : nullptr;
+	}
+	return nullptr;
+}
+
+#if WITH_EDITOR
 void UVdbAssetComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
-	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyChangedEvent.Property && PropertyChangedEvent.Property->GetName() == TEXT("VdbAsset"))
+	{
+		// trigger details customization refresh
+		OnVdbChanged.ExecuteIfBound();
+	}
 
-	CHECK_VOLUMES_POST_EDIT(DensityVolume, false);
-	CHECK_VOLUMES_POST_EDIT(TemperatureVolume, false);
-	CHECK_VOLUMES_POST_EDIT(ColorVolume, true);
+	Super::PostEditChangeProperty(PropertyChangedEvent);
 
-	return Super::PostEditChangeProperty(PropertyChangedEvent);
+	// Not exactly sure why but overriding property with DetailsCustomization prevents a parent Actor  
+	// PostEditChangeProperty, which is necessary to force a visual refresh of the VDB volume. Do it manually
+	GetOwner()->PostEditChangeProperty(PropertyChangedEvent);
 }
 #endif
 

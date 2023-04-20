@@ -49,6 +49,7 @@ public:
 	// We only support Volume with cubic voxels (same dimension in all axes)
 	float GetVoxelSize() const { return VoxelSize.X; }
 	int GetMemorySize() const { return MemoryUsage; }
+	FString GetType() const;
 #if WITH_EDITORONLY_DATA
 	class UAssetImportData* GetAssetImportData() { return AssetImportData; }
 #endif
