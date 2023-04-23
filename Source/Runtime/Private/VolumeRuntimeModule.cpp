@@ -16,7 +16,6 @@
 #include "VdbCommon.h"
 #include "VdbAssetComponentDetailsCustomization.h"
 #include "Rendering/VdbMaterialRendering.h"
-#include "Rendering/VdbPrincipledRendering.h"
 
 #include "Interfaces/IPluginManager.h"
 #include "ShaderCore.h"
@@ -43,7 +42,6 @@ void FVolumeRuntimeModule::ShutdownModule()
 	UnregisterVolumeTrackHandler(&VdbVolumeSequenceTrackHandler);
 
 	if (VdbMaterialRenderExtension) VdbMaterialRenderExtension->Release();
-	if (VdbPrincipledRenderExtension) VdbPrincipledRenderExtension->Release();
 }
 
 FVolumeRuntimeModule::TRenderExtensionPtr FVolumeRuntimeModule::GetRenderExtension(UTextureRenderTarget2D* DefaultRenderTarget)
@@ -76,24 +74,6 @@ FVolumeRuntimeModule::TRenderExtensionPtr FVolumeRuntimeModule::GetOrCreateRende
 	}
 	return VdbMaterialRenderExtension;
 }
-
-FVolumeRuntimeModule::TRenderPrincipledPtr FVolumeRuntimeModule::GetRenderPrincipledMgr(UTextureRenderTarget2D* DefaultRenderTarget)
-{
-	static const FName ModuleName = "VolumeRuntime";
-	auto& ModuleInterface = FModuleManager::LoadModuleChecked<FVolumeRuntimeModule>(ModuleName);
-	return ModuleInterface.GetOrCreateRenderPrincipledMgr(DefaultRenderTarget);
-}
-
-FVolumeRuntimeModule::TRenderPrincipledPtr FVolumeRuntimeModule::GetOrCreateRenderPrincipledMgr(UTextureRenderTarget2D* DefaultRenderTarget)
-{
-	if (!VdbPrincipledRenderExtension.IsValid())
-	{
-		VdbPrincipledRenderExtension = FSceneViewExtensions::NewExtension<FVdbPrincipledRendering>();
-		VdbPrincipledRenderExtension->Init(DefaultRenderTarget);
-	}
-	return VdbPrincipledRenderExtension;
-}
-
 
 #undef LOCTEXT_NAMESPACE
 	
