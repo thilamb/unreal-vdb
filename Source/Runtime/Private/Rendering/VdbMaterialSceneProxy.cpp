@@ -36,6 +36,7 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 	ImprovedSkylight = InComponent->ImprovedSkylight;
 	TrilinearSampling = InComponent->TrilinearSampling;
 	CastShadows = InComponent->CastShadow;
+	RenderAfterTransparents = InComponent->RenderAfterTransparents;
 
 	VdbMaterialRenderExtension = FVolumeRuntimeModule::GetRenderExtension(InComponent->RenderTarget);
 
@@ -160,4 +161,29 @@ void FVdbMaterialSceneProxy::UpdateCurveAtlasTex()
 {
 	// Doing this every frame allows realtime preview and update when modifying color curves
 	CurveAtlasTex = CurveAtlas ? CurveAtlas->GetResource() : nullptr;
+}
+
+FRDGTextureRef FVdbMaterialSceneProxy::GetOrCreateRenderTarget(FRDGBuilder& GraphBuilder, const FIntPoint& RtSize, bool EvenFrame)
+{
+	if (!OffscreenRenderTarget[EvenFrame].IsValid() || OffscreenRenderTarget[EvenFrame]->GetDesc().Extent != RtSize)
+	{
+		FRHICommandListImmediate& RHICmdList = FRHICommandListExecutor::GetImmediateCommandList();
+
+		const FPooledRenderTargetDesc Desc = FPooledRenderTargetDesc::Create2DDesc(
+			RtSize,
+			PF_FloatRGBA,
+			FClearValueBinding(FLinearColor::Transparent),
+			TexCreate_None,
+			TexCreate_ShaderResource | TexCreate_UAV | TexCreate_RenderTargetable,
+			false);
+
+		for (int idx = 0; idx < 2; ++idx)
+		{
+			FString DebugName = FString::Printf(TEXT("VdbRenderTarget_%d"), idx);
+			GRenderTargetPool.FindFreeElement(RHICmdList, Desc, OffscreenRenderTarget[idx], *DebugName);
+			ensure(OffscreenRenderTarget[idx].IsValid());
+		}
+	}
+
+	return GraphBuilder.RegisterExternalTexture(OffscreenRenderTarget[EvenFrame]);
 }

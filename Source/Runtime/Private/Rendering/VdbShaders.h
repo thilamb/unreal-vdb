@@ -93,6 +93,9 @@ BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbShaderParams, )
 	SHADER_PARAMETER(int32, VirtualShadowMapId)
 	// Indirect Lighting
 	SHADER_PARAMETER_STRUCT(FLumenTranslucencyLightingParameters, LumenGIVolumeStruct)
+	// Path-tracing
+	SHADER_PARAMETER(uint32, NumAccumulations)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, PrevAccumTex)
 END_GLOBAL_SHADER_PARAMETER_STRUCT()
 
 
@@ -264,11 +267,8 @@ BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbDepthShaderParams, )
 
 BEGIN_SHADER_PARAMETER_STRUCT(FVdbShadowDepthPassParameters, )
 	SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
-	//SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FMobileShadowDepthPassUniformParameters, MobilePassUniformBuffer)
 	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FShadowDepthPassUniformParameters, DeferredPassUniformBuffer)
 	SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
-	//SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
-	//SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FInstanceCullingGlobalUniforms, InstanceCulling)
 	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FVdbDepthShaderParams, VdbUniformBuffer)
 
 	RENDER_TARGET_BINDING_SLOTS()

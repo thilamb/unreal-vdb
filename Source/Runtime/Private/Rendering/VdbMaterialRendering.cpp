@@ -40,6 +40,75 @@ DEFINE_LOG_CATEGORY(LogSparseVolumetrics);
 DECLARE_GPU_STAT_NAMED(StatVdbMaterial, TEXT("Vdb Material Rendering"));
 DECLARE_GPU_STAT_NAMED(StatVdbShadowDepthMaterial, TEXT("Vdb Shadow Depth Material Rendering"));
 
+void SetupRenderPassParameters(
+	FVdbMaterialSceneProxy* Proxy,
+	FRDGBuilder& GraphBuilder,
+	FVdbShaderPS::FParameters* PassParameters,
+	// Light data
+	bool ApplyEmissionAndTransmittance,
+	bool ApplyDirectLighting,
+	bool ApplyShadowTransmittance,
+	uint32 LightType,
+	FLightSceneInfo* LightSceneInfo,
+	const FVisibleLightInfo* VisibleLightInfo,
+	// Scene data
+	const FPostOpaqueRenderParameters& Parameters,
+	const FViewInfo* ViewInfo,
+	// Path tracing
+	uint32 NumAccumulations,
+	FRDGTextureRef PrevAccumuliationTex
+)
+{
+	FVdbShaderParams* VdbParameters = GraphBuilder.AllocParameters<FVdbShaderParams>();
+
+	// Scene data
+	VdbParameters->SceneDepthTexture = Parameters.DepthTexture;
+	VdbParameters->LinearTexSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+	VdbParameters->NumAccumulations = NumAccumulations;
+	VdbParameters->PrevAccumTex = PrevAccumuliationTex;
+
+	// Vdb data
+	VdbParameters->Threshold = FMath::Max(0.0, FVdbCVars::CVarVolumetricVdbThreshold.GetValueOnAnyThread());
+
+	// Light data
+	VdbParameters->bApplyEmissionAndTransmittance = ApplyEmissionAndTransmittance;
+	VdbParameters->bApplyDirectLighting = ApplyDirectLighting;
+	VdbParameters->bApplyShadowTransmittance = ApplyShadowTransmittance;
+	VdbParameters->LightType = LightType;
+
+	FDeferredLightUniformStruct DeferredLightUniform;
+	if (ApplyDirectLighting && (LightSceneInfo != nullptr))
+	{
+		DeferredLightUniform = GetDeferredLightParameters(*ViewInfo, *LightSceneInfo);
+	}
+	VdbParameters->DeferredLight = DeferredLightUniform;
+
+	// Shadow data
+	VdbParameters->ForwardLightData = *ViewInfo->ForwardLightingResources.ForwardLightData;
+	VdbParameters->VirtualShadowMapId = VisibleLightInfo ? VisibleLightInfo->GetVirtualShadowMapId(ViewInfo) : INDEX_NONE;
+
+	const FProjectedShadowInfo* ProjectedShadowInfo = VisibleLightInfo ? GetShadowForInjectionIntoVolumetricFog(*VisibleLightInfo) : nullptr;
+	if (ProjectedShadowInfo != nullptr)
+	{
+		SetVolumeShadowingShaderParameters(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters, *ViewInfo, LightSceneInfo, ProjectedShadowInfo);
+	}
+	else
+	{
+		SetVolumeShadowingDefaultShaderParameters(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters);
+	}
+	PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
+
+	// Indirect lighting data
+	VdbParameters->LumenGIVolumeStruct = GetLumenTranslucencyLightingParameters(GraphBuilder, ViewInfo->LumenTranslucencyGIVolume, ViewInfo->LumenFrontLayerTranslucency);
+
+	// Pass params
+	PassParameters->View = ViewInfo->ViewUniformBuffer;
+
+	// Finalize VdbUniformBuffer
+	TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(VdbParameters);
+	PassParameters->VdbUniformBuffer = VdbUniformBuffer;
+}
+
 //-----------------------------------------------------------------------------
 //--- FVdbMaterialRendering
 //-----------------------------------------------------------------------------
@@ -124,7 +193,7 @@ void FVdbMaterialRendering::InitVertexFactory()
 
 void FVdbMaterialRendering::InitDelegate()
 {
-	if (!RenderDelegateHandle.IsValid())
+	if (!RenderPostOpaqueDelegateHandle.IsValid())
 	{
 		const FName RendererModuleName("Renderer");
 		IRendererModule* RendererModule = FModuleManager::GetModulePtr<IRendererModule>(RendererModuleName);
@@ -135,33 +204,32 @@ void FVdbMaterialRendering::InitDelegate()
 			ShadowDepthDelegateHandle = RendererModule->RegisterShadowDepthRenderDelegate(ShadowDepthDelegate);
 #endif
 
-			RenderDelegate.BindRaw(this, &FVdbMaterialRendering::Render_RenderThread);
+			RenderPostOpaqueDelegate.BindRaw(this, &FVdbMaterialRendering::RenderPostOpaque_RenderThread);
+			RenderOverlayDelegate.BindRaw(this, &FVdbMaterialRendering::RenderOverlay_RenderThread);
 			// Render VDBs before or after Transparent objects
-			if (FVdbCVars::CVarVolumetricVdbAfterTransparents.GetValueOnRenderThread())
-			{
-				RenderDelegateHandle = RendererModule->RegisterOverlayRenderDelegate(RenderDelegate);
-			}
-			else
-			{
-				RenderDelegateHandle = RendererModule->RegisterPostOpaqueRenderDelegate(RenderDelegate);
-			}
+			RenderPostOpaqueDelegateHandle = RendererModule->RegisterPostOpaqueRenderDelegate(RenderPostOpaqueDelegate);
+			RenderOverlayDelegateHandle = RendererModule->RegisterOverlayRenderDelegate(RenderOverlayDelegate);
 		}
 	}
 }
 
 void FVdbMaterialRendering::ReleaseDelegate()
 {
-	if (RenderDelegateHandle.IsValid())
+	if (RenderPostOpaqueDelegateHandle.IsValid())
 	{
 		const FName RendererModuleName("Renderer");
 		IRendererModule* RendererModule = FModuleManager::GetModulePtr<IRendererModule>(RendererModuleName);
 		if (RendererModule)
 		{
-			RendererModule->RemovePostOpaqueRenderDelegate(RenderDelegateHandle);
-			RendererModule->RemovePostOpaqueRenderDelegate(ShadowDepthDelegateHandle);
+#if VDB_CAST_SHADOWS
+			RendererModule->RemoveShadowDepthRenderDelegate(ShadowDepthDelegateHandle);
+#endif
+			RendererModule->RemovePostOpaqueRenderDelegate(RenderPostOpaqueDelegateHandle);
+			RendererModule->RemovePostOpaqueRenderDelegate(RenderOverlayDelegateHandle);
 		}
 
-		RenderDelegateHandle.Reset();
+		RenderPostOpaqueDelegateHandle.Reset();
+		RenderOverlayDelegateHandle.Reset();
 		ShadowDepthDelegateHandle.Reset();
 	}
 }
@@ -324,7 +392,17 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 }
 #endif
 
-void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Parameters)
+void FVdbMaterialRendering::RenderPostOpaque_RenderThread(FPostOpaqueRenderParameters& Parameters)
+{
+	Render_RenderThread(Parameters, false);
+}
+
+void FVdbMaterialRendering::RenderOverlay_RenderThread(FPostOpaqueRenderParameters& Parameters)
+{
+	Render_RenderThread(Parameters, true);
+}
+
+void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Parameters, bool PostTranslucents)
 {
 	if (!ShouldRenderVolumetricVdb())
 		return;
@@ -335,9 +413,18 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 	RDG_GPU_STAT_SCOPE(*Parameters.GraphBuilder, StatVdbMaterial);
 
 	const FSceneView* View = static_cast<FSceneView*>(Parameters.Uid);
+	const FViewInfo* ViewInfo = static_cast<const FViewInfo*>(View);
 	const FMatrix& ViewMat = View->ViewMatrices.GetViewMatrix();
+	
+	const bool UsePathTracing = View->Family->EngineShowFlags.PathTracing;
+	if (UsePathTracing && !PostTranslucents) // When using pathtracing only use overlay delegate render mode
+		return;
 
-	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return !Proxy->IsTranslucent() && Proxy->IsVisible(View); });
+	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate(
+		[View, PostTranslucents, UsePathTracing](const FVdbMaterialSceneProxy* Proxy)
+		{ 
+			return !Proxy->IsTranslucent() && Proxy->IsVisible(View) && (Proxy->RendersAfterTransparents() == PostTranslucents || UsePathTracing);
+		});
 	OpaqueProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool 
 		{ 
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
@@ -345,7 +432,11 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			return ViewMat.TransformPosition(LeftProxyCenter).Z < ViewMat.TransformPosition(RightProxyCenter).Z; // front to back
 		});
 
-	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return Proxy->IsTranslucent() && Proxy->IsVisible(View); });
+	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate(
+		[View, PostTranslucents, UsePathTracing](const FVdbMaterialSceneProxy* Proxy)
+		{ 
+			return Proxy->IsTranslucent() && Proxy->IsVisible(View) && (Proxy->RendersAfterTransparents() == PostTranslucents || UsePathTracing);
+		});
 	TranslucentProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
 		{
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
@@ -355,12 +446,28 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 
 	FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
 
+	SVdbPathtrace VdbPathtrace;
+#if RHI_RAYTRACING
+	if (ViewInfo->Family->EngineShowFlags.PathTracing)
+	{
+		if (FSceneViewState* ViewState = ViewInfo->ViewState)
+		{
+			VdbPathtrace.NumAccumulations = ViewState->GetPathTracingSampleIndex() ? ViewState->GetPathTracingSampleIndex() - 1u : 0u;
+		}
+		VdbPathtrace.RtSize = Parameters.ColorTexture->Desc.Extent;
+		VdbPathtrace.IsEven = VdbPathtrace.NumAccumulations % 2;
+		VdbPathtrace.FirstRender = true;
+		VdbPathtrace.MaxSPP = FMath::Max(View->FinalPostProcessSettings.PathTracingSamplesPerPixel, 1);
+		VdbPathtrace.UsePathtracing = true;
+	}
+#endif
+
 	if (!OpaqueProxies.IsEmpty())
 	{
 		SCOPE_CYCLE_COUNTER(STAT_VdbOpaque_RT);
-		for (const FVdbMaterialSceneProxy* Proxy : OpaqueProxies)
+		for (FVdbMaterialSceneProxy* Proxy : OpaqueProxies)
 		{
-			RenderLights(Proxy, false, Parameters, nullptr, nullptr);
+			RenderLights(Proxy, false, Parameters, VdbPathtrace, nullptr, nullptr);
 		}
 	}
 
@@ -396,9 +503,18 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			AddClearDepthStencilPass(GraphBuilder, DepthTestTexture, ERenderTargetLoadAction::EClear, ERenderTargetLoadAction::ENoAction);
 		}
 
-		for (const FVdbMaterialSceneProxy* Proxy : TranslucentProxies)
+		for (FVdbMaterialSceneProxy* Proxy : TranslucentProxies)
 		{
-			RenderLights(Proxy, true, Parameters, VdbCurrRenderTexture, DepthTestTexture);
+			if (!VdbPathtrace.UsePathtracing || VdbPathtrace.NumAccumulations < (uint32)VdbPathtrace.MaxSPP)
+			{
+				RenderLights(Proxy, true, Parameters, VdbPathtrace, VdbCurrRenderTexture, DepthTestTexture);
+			}
+
+			if (UsePathTracing)
+			{
+				FRDGTextureRef RenderTexture = Proxy->GetOrCreateRenderTarget(GraphBuilder, VdbPathtrace.RtSize, VdbPathtrace.IsEven);
+				VdbComposite::CompositeFullscreen(GraphBuilder, RenderTexture, VdbCurrRenderTexture, nullptr, nullptr, View);
+			}
 		}
 
 		// Add optional post-processing (blurring, denoising etc.)
@@ -420,10 +536,11 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 
 void FVdbMaterialRendering::RenderLights(
 	// Object Data
-	const FVdbMaterialSceneProxy* Proxy,
+	FVdbMaterialSceneProxy* Proxy,
 	bool Translucent, 
 	// Scene data
 	const FPostOpaqueRenderParameters& Parameters,
+	const SVdbPathtrace& VdbPathtrace,
 	FRDGTexture* RenderTexture, 
 	FRDGTexture* DepthRenderTexture)
 {
@@ -483,6 +600,7 @@ void FVdbMaterialRendering::RenderLights(
 			VisibleLightInfo,
 			// Scene data
 			Parameters,
+			VdbPathtrace,
 			RenderTexture,
 			DepthRenderTexture
 		);
@@ -492,71 +610,9 @@ void FVdbMaterialRendering::RenderLights(
 	}
 }
 
-void SetupRenderPassParameters(
-	FRDGBuilder& GraphBuilder,
-	FVdbShaderPS::FParameters* PassParameters,
-	// Light data
-	bool ApplyEmissionAndTransmittance,
-	bool ApplyDirectLighting,
-	bool ApplyShadowTransmittance,
-	uint32 LightType,
-	FLightSceneInfo* LightSceneInfo,
-	const FVisibleLightInfo* VisibleLightInfo,
-	// Scene data
-	const FPostOpaqueRenderParameters& Parameters,
-	const FViewInfo* ViewInfo
-)
-{
-	FVdbShaderParams* VdbParameters = GraphBuilder.AllocParameters<FVdbShaderParams>();
-
-	// Scene data
-	VdbParameters->SceneDepthTexture = Parameters.DepthTexture;
-	VdbParameters->LinearTexSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
-	// Vdb data
-	VdbParameters->Threshold = FMath::Max(0.0, FVdbCVars::CVarVolumetricVdbThreshold.GetValueOnAnyThread());
-
-	// Light data
-	VdbParameters->bApplyEmissionAndTransmittance = ApplyEmissionAndTransmittance;
-	VdbParameters->bApplyDirectLighting = ApplyDirectLighting;
-	VdbParameters->bApplyShadowTransmittance = ApplyShadowTransmittance;
-	VdbParameters->LightType = LightType;
-
-	FDeferredLightUniformStruct DeferredLightUniform;
-	if (ApplyDirectLighting && (LightSceneInfo != nullptr))
-	{
-		DeferredLightUniform = GetDeferredLightParameters(*ViewInfo, *LightSceneInfo);
-	}
-	VdbParameters->DeferredLight = DeferredLightUniform;
-
-	// Shadow data
-	VdbParameters->ForwardLightData = *ViewInfo->ForwardLightingResources.ForwardLightData;
-	VdbParameters->VirtualShadowMapId = VisibleLightInfo ? VisibleLightInfo->GetVirtualShadowMapId(ViewInfo) : INDEX_NONE;
-
-	const FProjectedShadowInfo* ProjectedShadowInfo = VisibleLightInfo ? GetShadowForInjectionIntoVolumetricFog(*VisibleLightInfo) : nullptr;
-	if (ProjectedShadowInfo != nullptr)
-	{
-		SetVolumeShadowingShaderParameters(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters, *ViewInfo, LightSceneInfo, ProjectedShadowInfo);
-	}
-	else
-	{
-		SetVolumeShadowingDefaultShaderParameters(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters);
-	}
-	PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
-
-	// Indirect lighting data
-	VdbParameters->LumenGIVolumeStruct = GetLumenTranslucencyLightingParameters(GraphBuilder, ViewInfo->LumenTranslucencyGIVolume, ViewInfo->LumenFrontLayerTranslucency);
-
-	// Pass params
-	PassParameters->View = ViewInfo->ViewUniformBuffer;
-
-	// Finalize VdbUniformBuffer
-	TRDGUniformBufferRef<FVdbShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(VdbParameters);
-	PassParameters->VdbUniformBuffer = VdbUniformBuffer;
-}
-
 void FVdbMaterialRendering::RenderLight(
 	// Object data
-	const FVdbMaterialSceneProxy* Proxy,
+	FVdbMaterialSceneProxy* Proxy,
 	bool Translucent,
 	// Light data
 	bool ApplyEmissionAndTransmittance,
@@ -567,6 +623,7 @@ void FVdbMaterialRendering::RenderLight(
 	const FVisibleLightInfo* VisibleLightInfo,
 	// Scene data
 	const FPostOpaqueRenderParameters& Parameters,
+	const SVdbPathtrace& VdbPathtrace,
 	FRDGTexture* RenderTexture,
 	FRDGTexture* DepthRenderTexture)
 {
@@ -577,6 +634,7 @@ void FVdbMaterialRendering::RenderLight(
 
 	FVdbShaderPS::FParameters* PassParameters = GraphBuilder.AllocParameters<FVdbShaderPS::FParameters>();
 	SetupRenderPassParameters(
+		Proxy,
 		GraphBuilder,
 		PassParameters, 
 		ApplyEmissionAndTransmittance, 
@@ -586,13 +644,23 @@ void FVdbMaterialRendering::RenderLight(
 		LightSceneInfo,
 		VisibleLightInfo,
 		Parameters,
-		ViewInfo);
+		ViewInfo,
+		VdbPathtrace.NumAccumulations,
+		VdbPathtrace.UsePathtracing ? Proxy->GetOrCreateRenderTarget(GraphBuilder, VdbPathtrace.RtSize, !VdbPathtrace.IsEven) : FRDGSystemTextures::Get(GraphBuilder).Black
+		);
+
+	if (VdbPathtrace.UsePathtracing)
+	{
+		RenderTexture = Proxy->GetOrCreateRenderTarget(GraphBuilder, VdbPathtrace.RtSize, VdbPathtrace.IsEven);
+	}
+
+	bool bClear = VdbPathtrace.UsePathtracing && ApplyEmissionAndTransmittance;
 
 	// Render Targets
 	bool bWriteDepth = DepthRenderTexture != nullptr;
 	if (RenderTexture)
 	{
-		PassParameters->RenderTargets[0] = FRenderTargetBinding(RenderTexture, ERenderTargetLoadAction::ELoad);
+		PassParameters->RenderTargets[0] = FRenderTargetBinding(RenderTexture, bClear ? ERenderTargetLoadAction::EClear : ERenderTargetLoadAction::ELoad);
 		if (bWriteDepth)
 		{
 			PassParameters->RenderTargets.DepthStencil =

@@ -49,11 +49,13 @@ public:
 	bool IsIndexToLocalDeterminantNegative() const { return IndexToLocalDeterminantNegative; }
 	bool UseImprovedSkylight() const { return ImprovedSkylight; }
 	bool UseTrilinearSampling() const { return TrilinearSampling; }
+	bool RendersAfterTransparents() const { return RenderAfterTransparents; }
 	void ResetVisibility() { VisibleViews.Empty(4); }
 	bool IsVisible(const FSceneView* View) const { return VisibleViews.Find(View) != INDEX_NONE; }
 	void Update(const FMatrix44f& IndexToLocal, const FVector3f& IndexMin, const FVector3f& IndexSize, FVdbRenderBuffer* DensityRenderBuffer, FVdbRenderBuffer* TemperatureRenderBuffer, FVdbRenderBuffer* ColorRenderBuffer);
 	void UpdateCurveAtlasTex();
 
+	FRDGTextureRef GetOrCreateRenderTarget(FRDGBuilder& GraphBuilder, const FIntPoint& RtSize, bool EvenFrame);
 
 	//~ Begin FPrimitiveSceneProxy Interface
 	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
@@ -79,6 +81,7 @@ private:
 	bool TrilinearSampling;
 	bool IndexToLocalDeterminantNegative;
 	bool CastShadows;
+	bool RenderAfterTransparents;
 
 	FIntVector4 CustomIntData0;
 	FIntVector4 CustomIntData1;
@@ -98,4 +101,7 @@ private:
 	FMatrix44f IndexToLocal;
 
 	mutable TArray<const FSceneView*> VisibleViews;
+
+	// For path-tracing accumulation only
+	TRefCountPtr<IPooledRenderTarget> OffscreenRenderTarget[2];
 };

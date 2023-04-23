@@ -79,6 +79,10 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (DisplayName="Improved Skylight sampling (SLOW)"))
 	bool ImprovedSkylight = false;
 
+	// VDBs are rendered after opaques and before transparent by default. Check this option to render them after transparent objects.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
+	bool RenderAfterTransparents = false;
+
 	// Density multiplier of the volume, modulating VdbPrincipal values 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (ClampMin = "0.0", UIMin = "0.0"))
 	float DensityMultiplier = 100.0;
