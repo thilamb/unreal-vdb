@@ -21,23 +21,19 @@
 class FVolumeRuntimeModule : public IModuleInterface
 {
 	typedef TSharedPtr<class FVdbMaterialRendering, ESPMode::ThreadSafe> TRenderExtensionPtr;
-	typedef TSharedPtr<class FVdbPrincipledRendering, ESPMode::ThreadSafe> TRenderPrincipledPtr;
 
 public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 
 	static TRenderExtensionPtr GetRenderExtension(UTextureRenderTarget2D* DefaultRenderTarget);
-	static TRenderPrincipledPtr GetRenderPrincipledMgr(UTextureRenderTarget2D* DefaultRenderTarget);
 
 private:
 	void RegisterDetailsCustomzations();
 
 	TRenderExtensionPtr GetOrCreateRenderExtension(UTextureRenderTarget2D* DefaultRenderTarget);
-	TRenderPrincipledPtr GetOrCreateRenderPrincipledMgr(UTextureRenderTarget2D* DefaultRenderTarget);
 
 	TRenderExtensionPtr VdbMaterialRenderExtension; // Regular renderer
-	TRenderPrincipledPtr VdbPrincipledRenderExtension; // Experimentation renderer
 
 	FVdbVolumeSequenceTrackHandler VdbVolumeSequenceTrackHandler;
 };
