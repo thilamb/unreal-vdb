@@ -398,10 +398,15 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 
 	Radiance.rgb *= ResolvedView.RealTimeReflectionCapture ? ResolvedView.RealTimeReflectionCapturePreExposure : ResolvedView.PreExposure;
 
-	OutColor0 = Radiance;
+	// Optional accumulation with path-tracing. Ignored if not using path-tracing
+	uint NumSamples = VdbParams.NumAccumulations + 1;
+	float BlendFactor = 1.0 / float(NumSamples);
+	// Ignore and Reset if first Accumuluation
+	float4 OldPixel = NumSamples > 1 ? VdbParams.PrevAccumTex[uint2(SvPosition.xy)] : 0.0;
+
+	OutColor0 = lerp(OldPixel, Radiance, BlendFactor);
 
 	// Output Depth to improve TAA and TSR. This will cause issues when VDB is transparent but we'll live with the consequences. 
-	// TODO: make this a shader variation.
 	float SceneDepth = 1.0;
 	if (any(FirstIntersection != 0.0))
 	{

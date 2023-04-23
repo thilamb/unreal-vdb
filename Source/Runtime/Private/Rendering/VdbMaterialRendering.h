@@ -53,6 +53,16 @@ public:
 
 private:
 
+	struct SVdbPathtrace
+	{
+		uint32 NumAccumulations = 0;
+		int32 MaxSPP = 1;
+		FIntPoint RtSize = FIntPoint::ZeroValue;
+		bool UsePathtracing = false;
+		bool IsEven = false;
+		bool FirstRender = true;
+	};
+
 	void InitRendering();
 	void ReleaseRendering();
 
@@ -64,20 +74,23 @@ private:
 #if VDB_CAST_SHADOWS
 	void ShadowDepth_RenderThread(FShadowDepthRenderParameters& Parameters);
 #endif
-	void Render_RenderThread(FPostOpaqueRenderParameters& Parameters);
+	void Render_RenderThread(FPostOpaqueRenderParameters& Parameters, bool PostOpaque);
+	void RenderPostOpaque_RenderThread(FPostOpaqueRenderParameters& Parameters);
+	void RenderOverlay_RenderThread(FPostOpaqueRenderParameters& Parameters);
 
 	void RenderLights(
 		// Object Data
-		const FVdbMaterialSceneProxy* Proxy,
+		FVdbMaterialSceneProxy* Proxy,
 		bool Translucent,
 		// Scene data
 		const FPostOpaqueRenderParameters& Parameters,
+		const SVdbPathtrace& VdbPathtrace,
 		FRDGTexture* RenderTexture,
 		FRDGTexture* DepthRenderTexture);
 
 	void RenderLight(
 		// Object data
-		const FVdbMaterialSceneProxy* Proxy,
+		FVdbMaterialSceneProxy* Proxy,
 		bool Translucent,
 		// Light data
 		bool ApplyEmissionAndTransmittance,
@@ -88,14 +101,17 @@ private:
 		const FVisibleLightInfo* VisibleLightInfo,
 		// Scene data
 		const FPostOpaqueRenderParameters& Parameters,
+		const SVdbPathtrace& VdbPathtrace,
 		FRDGTexture* RenderTexture,
 		FRDGTexture* DepthRenderTexture);
 
 	TArray<FVdbMaterialSceneProxy*> VdbProxies;
 	TUniquePtr<class FVolumeMeshVertexBuffer> VertexBuffer;
 	TUniquePtr<class FVolumeMeshVertexFactory> VertexFactory;
-	FPostOpaqueRenderDelegate RenderDelegate;
-	FDelegateHandle RenderDelegateHandle;
+	FPostOpaqueRenderDelegate RenderPostOpaqueDelegate;
+	FPostOpaqueRenderDelegate RenderOverlayDelegate;
+	FDelegateHandle RenderPostOpaqueDelegateHandle;
+	FDelegateHandle RenderOverlayDelegateHandle;
 #if VDB_CAST_SHADOWS
 	FShadowDepthRenderDelegate ShadowDepthDelegate;
 #endif
