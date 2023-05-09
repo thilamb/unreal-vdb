@@ -39,6 +39,7 @@ Texture2D				BlackbodyColor; // curve atlas
 #define TEMPORAL_NOISE bool(CustomIntData0.w) 
 #define CURVE_INDEX CustomIntData1.x
 #define CURVE_HEIGHT CustomIntData1.y
+#define TEMPERATURE_ONLY CustomIntData1.w
 #define LOCAL_STEP_SIZE CustomFloatData0.x
 #define SHADOW_STEP_SIZE_MULT CustomFloatData0.y
 #define VOXEL_SIZE CustomFloatData0.z
@@ -213,7 +214,7 @@ float4 RaymarchFogVolume(
 			Radiance += StepTransmittance * EmissiveColor;
 		}
 
-		if (Density == 0.0) continue;
+		if (TEMPERATURE_ONLY != 0 || Density == 0.0) continue;
 
 		MinDistLocal = min(MinDistLocal, LocalDist);
 
@@ -302,10 +303,13 @@ float4 RaymarchFogVolume(
 		}
 	}
 	
-	// Re-doing computation at the end to avoid weird issue when trilinear sampling is enabled.
-	pnanovdb_vec3_t LocalPosition = pnanovdb_hdda_ray_start(Ray.Origin, MinDistLocal, Ray.Direction);
-	float3 WorldPos = IndexToWorldPosition(LocalPosition, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
-	FirstIntersection = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
+	if (TEMPERATURE_ONLY == 0)
+	{
+		// Re-doing computation at the end to avoid weird issue when trilinear sampling is enabled.
+		pnanovdb_vec3_t LocalPosition = pnanovdb_hdda_ray_start(Ray.Origin, MinDistLocal, Ray.Direction);
+		float3 WorldPos = IndexToWorldPosition(LocalPosition, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
+		FirstIntersection = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
+	}
 	
 	return float4(Radiance, 1.0 - Average(Transmittance));
 }
@@ -387,7 +391,7 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 
 	Radiance /= SAMPLES_PER_PIXEL_FLOAT;
 
-	if (Radiance.a == 0.0f)
+	if (TEMPERATURE_ONLY == 0 && Radiance.a == 0.0f)
 	{
 		discard;
 	}

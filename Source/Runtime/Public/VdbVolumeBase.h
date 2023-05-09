@@ -43,7 +43,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = Volume)
 	bool IsVectorGrid() const { return IsVolVector; }
 
-	EVdbClass GetVdbClass() { return VdbClass; };
+	EVdbClass GetVdbClass() const { return VdbClass; };
 	const FBox& GetGlobalBounds() const { return Bounds; }
 	const FIntVector& GetLargestVolume() const { return LargestVolume; }
 	// We only support Volume with cubic voxels (same dimension in all axes)

@@ -56,6 +56,8 @@ class UVdbAssetComponent : public UActorComponent
 	EVdbClass GetVdbClass() const;
 	const FVolumeRenderInfos* GetRenderInfos(const UVdbVolumeBase* VdbVolumeStatic) const;
 
+	const UVdbVolumeBase* GetMainVolume() const;
+
 	TArray<const class UVdbVolumeBase*> GetConstVolumes() const;
 	TArray<class UVdbVolumeBase*> GetVolumes();
 

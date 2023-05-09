@@ -47,6 +47,7 @@ public:
 	bool IsTranslucentLevelSet() const { return LevelSet && TranslucentLevelSet; }
 	bool IsTranslucent() const { return !LevelSet || TranslucentLevelSet; }
 	bool IsIndexToLocalDeterminantNegative() const { return IndexToLocalDeterminantNegative; }
+	bool IsTemperatureOnly() const { return TemperatureOnly; }
 	bool UseImprovedSkylight() const { return ImprovedSkylight; }
 	bool UseTrilinearSampling() const { return TrilinearSampling; }
 	void ResetVisibility() { VisibleViews.Empty(4); }
@@ -79,6 +80,7 @@ private:
 	bool TrilinearSampling;
 	bool IndexToLocalDeterminantNegative;
 	bool CastShadows;
+	bool TemperatureOnly;
 
 	FIntVector4 CustomIntData0;
 	FIntVector4 CustomIntData1;

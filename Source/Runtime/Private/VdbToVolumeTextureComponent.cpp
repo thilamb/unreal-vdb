@@ -183,14 +183,21 @@ void UVdbToVolumeTextureComponent::CopyVdbToVolume_GameThread(uint32 FrameIndex)
 		}
 	}
 
+
+	const FVolumeRenderInfos* FirstValidRenderInfos = RenderInfosPrimary ? RenderInfosPrimary : (RenderInfosSecondary ? RenderInfosSecondary : RenderInfosTertiary);
+	UVdbVolumeBase* FirstValidVolume = VdbAssets->DensityVolume ? VdbAssets->DensityVolume : (VdbAssets->TemperatureVolume ? VdbAssets->TemperatureVolume : VdbAssets->ColorVolume);
+	
+	if (!FirstValidRenderInfos || !FirstValidVolume)
+		return;
+
 	ENQUEUE_RENDER_COMMAND(CopyVdbToVolumeTexture)(
 		[this,
 		RenderTarget = VolumeRenderTarget->GameThread_GetRenderTargetResource(),
 		PrimaryVol = FirstRenderInfos->GetRenderResource(),
 		SecondaryVol = SecondRenderInfos ? SecondRenderInfos->GetRenderResource() : nullptr,
-		VolumeOffset = RenderInfosPrimary->GetIndexMin(),
-		VolumeSize = RenderInfosPrimary->GetIndexSize(),
-		TextureSize = VdbAssets->DensityVolume->GetLargestVolume()]
+		VolumeOffset = FirstValidRenderInfos->GetIndexMin(),
+		VolumeSize = FirstValidRenderInfos->GetIndexSize(),
+		TextureSize = FirstValidVolume->GetLargestVolume()]
 	(FRHICommandListImmediate& RHICmdList)
 	{
 		CopyVdbToVolume_RenderThread(RHICmdList, RenderTarget, PrimaryVol, SecondaryVol, VolumeOffset, VolumeSize, TextureSize);

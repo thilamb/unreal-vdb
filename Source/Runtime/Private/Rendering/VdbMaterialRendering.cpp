@@ -197,7 +197,7 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 	const FSceneView* View = static_cast<const FSceneView*>(Parameters.ShadowDepthView);
 	const FMatrix& ViewMat = View->ShadowViewMatrices.GetViewMatrix();
 
-	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return !Proxy->IsTranslucent() && Proxy->IsVisible(View); });
+	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return !Proxy->IsTranslucent() && Proxy->IsVisible(View) && !Proxy->IsTemperatureOnly(); });
 	OpaqueProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
 		{
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
@@ -205,7 +205,7 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 			return ViewMat.TransformPosition(LeftProxyCenter).Z < ViewMat.TransformPosition(RightProxyCenter).Z; // front to back
 		});
 
-	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return Proxy->IsTranslucent() && Proxy->IsVisible(View); });
+	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return Proxy->IsTranslucent() && Proxy->IsVisible(View) && !Proxy->IsTemperatureOnly(); });
 	TranslucentProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
 		{
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
@@ -427,7 +427,7 @@ void FVdbMaterialRendering::RenderLights(
 	const FSceneViewFamily* ViewFamily = View->Family;
 	const FScene* Scene = (FScene*)ViewFamily->Scene;
 
-	if (!Proxy || !Proxy->GetMaterial() || !Proxy->IsVisible(View) || !Proxy->GetDensityRenderResource())
+	if (!Proxy || !Proxy->GetMaterial() || !Proxy->IsVisible(View) || !Proxy->GetDensityRenderResource() || !Proxy->GetDensityRenderResource()->IsInitialized())
 		return;
 
 	// Light culling
@@ -441,7 +441,7 @@ void FVdbMaterialRendering::RenderLights(
 	}
 
 	// Light loop:
-	int32 NumPasses = FMath::Max(LightSceneInfoCompact.Num(), 1);
+	int32 NumPasses = Proxy->IsTemperatureOnly() ? 1 : FMath::Max(LightSceneInfoCompact.Num(), 1);
 	for (int32 PassIndex = 0; PassIndex < NumPasses; ++PassIndex)
 	{
 		bool bApplyEmissionAndTransmittance = PassIndex == 0;
@@ -631,7 +631,7 @@ void FVdbMaterialRendering::RenderLight(
 					ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0();
 					ShaderElementData.CustomFloatData1 = Proxy->GetCustomFloatData1();
 					ShaderElementData.CustomFloatData2 = Proxy->GetCustomFloatData2();
-					ShaderElementData.DensityBufferSRV = Proxy->GetDensityRenderResource()->GetBufferSRV();
+					ShaderElementData.DensityBufferSRV = Proxy->IsTemperatureOnly() ? Proxy->GetTemperatureRenderResource()->GetBufferSRV() : Proxy->GetDensityRenderResource()->GetBufferSRV();
 					ShaderElementData.TemperatureBufferSRV = Proxy->GetTemperatureRenderResource() ? Proxy->GetTemperatureRenderResource()->GetBufferSRV() : nullptr;
 					ShaderElementData.ColorBufferSRV = Proxy->GetColorRenderResource() ? Proxy->GetColorRenderResource()->GetBufferSRV() : nullptr;
 					if (!ShaderElementData.DensityBufferSRV)

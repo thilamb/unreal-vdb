@@ -39,7 +39,10 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 
 	VdbMaterialRenderExtension = FVolumeRuntimeModule::GetRenderExtension(InComponent->RenderTarget);
 
-	const FVolumeRenderInfos* PrimaryRenderInfos = AssetComponent->GetRenderInfos(AssetComponent->DensityVolume);
+	TemperatureOnly = !AssetComponent->DensityVolume && AssetComponent->TemperatureVolume;
+	const UVdbVolumeBase* MainVolume = AssetComponent->GetMainVolume();
+
+	const FVolumeRenderInfos* PrimaryRenderInfos = AssetComponent->GetRenderInfos(MainVolume);
 	DensityRenderBuffer = PrimaryRenderInfos ? PrimaryRenderInfos->GetRenderResource() : nullptr;
 
 	IndexMin = PrimaryRenderInfos->GetIndexMin();
@@ -57,8 +60,8 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 	uint32 AtlasHeight = CurveAtlas ? CurveAtlas->TextureHeight : 0;
 
 	CustomIntData0 = FIntVector4(InComponent->MaxRayDepth, InComponent->SamplesPerPixel, InComponent->ColoredTransmittance, InComponent->TemporalNoise);
-	CustomIntData1 = FIntVector4(CurveIndex, int32(AtlasHeight), TranslucentLevelSet, 0);
-	float VoxelSize = AssetComponent->DensityVolume->GetVoxelSize();
+	CustomIntData1 = FIntVector4(CurveIndex, int32(AtlasHeight), TranslucentLevelSet, TemperatureOnly);
+	float VoxelSize = MainVolume->GetVoxelSize();
 	CustomFloatData0 = FVector4f(InComponent->LocalStepSize, InComponent->ShadowStepSizeMultiplier, VoxelSize, InComponent->Jittering);
 	CustomFloatData1 = FVector4f(InComponent->Anisotropy, InComponent->Albedo, InComponent->BlackbodyIntensity, (CurveIndex == INDEX_NONE) ? InComponent->BlackbodyTemperature : InComponent->TemperatureMultiplier);
 	CustomFloatData2 = FVector4f(InComponent->DensityMultiplier, InComponent->VolumePadding, InComponent->Ambient, InComponent->ShadowThreshold);
@@ -117,7 +120,7 @@ FPrimitiveViewRelevance FVdbMaterialSceneProxy::GetViewRelevance(const FSceneVie
 {
 	FPrimitiveViewRelevance Result;
 	Result.bDrawRelevance = IsShown(View);
-	Result.bShadowRelevance = CastShadows && IsShadowCast(View) && ShouldRenderInMainPass();
+	Result.bShadowRelevance = CastShadows && IsShadowCast(View) && ShouldRenderInMainPass() && !TemperatureOnly;
 	Result.bDynamicRelevance = true;
 	Result.bStaticRelevance = false;
 	Result.bRenderInMainPass = ShouldRenderInMainPass();

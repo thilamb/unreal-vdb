@@ -37,7 +37,7 @@ namespace VdbShaders
 struct FVdbElementData : public FMeshMaterialShaderElementData
 {
 	FIntVector4 CustomIntData0; // x: MaxRayDepth, y: SamplesPerPixel, z: colored transmittance, w: temporal noise
-	FIntVector4 CustomIntData1; // x: BlackbodyCurveIndex, y: CurveAtlaHeight, z: TranslucentLevelSet, w: unused
+	FIntVector4 CustomIntData1; // x: BlackbodyCurveIndex, y: CurveAtlaHeight, z: TranslucentLevelSet, w: TemperatureOnly
 	FVector4f CustomFloatData0; // x: Local step size, y: Shadow step size mutliplier, z: voxel size, w: jittering
 	FVector4f CustomFloatData1; // x: anisotropy, y: albedo, z: blackbody intensity, w: blackbody temperature
 	FVector4f CustomFloatData2; // x: density mul, y: padding, z: ambient, w: shadow threshold

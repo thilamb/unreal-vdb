@@ -69,13 +69,21 @@ TObjectPtr<UVdbVolumeBase> UVdbSequenceComponent::GetPrimarySequence() const
 	{
 		return VdbAssets->DensityVolume;
 	}
+	if (VdbAssets && VdbAssets->TemperatureVolume && VdbAssets->TemperatureVolume->IsSequence())
+	{
+		return VdbAssets->TemperatureVolume;
+	}
 	return nullptr;
 }
 const UVdbVolumeSequence* UVdbSequenceComponent::GetPrincipalSequence() const
 {
-	if (VdbAssets && VdbAssets->DensityVolume && VdbAssets->DensityVolume->IsSequence())
+	if (VdbAssets)
 	{
-		return Cast<const UVdbVolumeSequence>(VdbAssets->DensityVolume);
+		const UVdbVolumeBase* MainVolume = VdbAssets->GetMainVolume();
+		if (MainVolume && MainVolume->IsSequence())
+		{
+			return Cast<const UVdbVolumeSequence>(MainVolume);
+		}
 	}
 	return nullptr;
 }

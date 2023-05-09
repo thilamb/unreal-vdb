@@ -43,6 +43,11 @@ TArray<UVdbVolumeBase*> UVdbAssetComponent::GetVolumes()
 	return Array;
 }
 
+const UVdbVolumeBase* UVdbAssetComponent::GetMainVolume() const
+{
+	return DensityVolume ? DensityVolume : TemperatureVolume;
+}
+
 const FVolumeRenderInfos* UVdbAssetComponent::GetRenderInfos(const UVdbVolumeBase* VdbVolume) const
 {
 	if (VdbVolume != nullptr)
@@ -65,9 +70,9 @@ const FVolumeRenderInfos* UVdbAssetComponent::GetRenderInfos(const UVdbVolumeBas
 
 EVdbClass UVdbAssetComponent::GetVdbClass() const
 {
-	if (DensityVolume != nullptr)
+	if (const UVdbVolumeBase* MainVolume = GetMainVolume())
 	{
-		return DensityVolume->GetVdbClass();
+		return MainVolume->GetVdbClass();
 	}
 	else
 	{
@@ -104,28 +109,28 @@ void UVdbAssetComponent::GetReferencedContentObjects(TArray<UObject*>& Objects) 
 
 FVector3f UVdbAssetComponent::GetVolumeSize() const
 {
-	if (DensityVolume)
+	if (const UVdbVolumeBase* MainVolume = GetMainVolume())
 	{
-		return FVector3f(DensityVolume->GetBounds(TargetFrameIndex).GetSize());
+		return FVector3f(MainVolume->GetBounds(TargetFrameIndex).GetSize());
 	}
 	return FVector3f::OneVector;
 }
 
 FVector3f UVdbAssetComponent::GetVolumeOffset() const
 {
-	if (DensityVolume)
+	if (const UVdbVolumeBase* MainVolume = GetMainVolume())
 	{
-		return FVector3f(DensityVolume->GetBounds(TargetFrameIndex).Min);
+		return FVector3f(MainVolume->GetBounds(TargetFrameIndex).Min);
 	}
 	return FVector3f::ZeroVector;
 }
 
 FVector3f UVdbAssetComponent::GetVolumeUvScale() const
 {
-	if (DensityVolume)
+	if (const UVdbVolumeBase* MainVolume = GetMainVolume())
 	{
-		const FIntVector& LargestVolume = DensityVolume->GetLargestVolume();
-		const FVector3f& VolumeSize = DensityVolume->GetRenderInfos(TargetFrameIndex)->GetIndexSize();
+		const FIntVector& LargestVolume = MainVolume->GetLargestVolume();
+		const FVector3f& VolumeSize = MainVolume->GetRenderInfos(TargetFrameIndex)->GetIndexSize();
 
 		return FVector3f(	VolumeSize.X / (float)LargestVolume.X, 
 							VolumeSize.Y / (float)LargestVolume.Y,
