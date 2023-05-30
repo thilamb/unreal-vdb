@@ -173,7 +173,7 @@ int32 FVolumeSection::OnPaintSection(FSequencerSectionPainter& Painter) const
 			FSlateDrawElement::MakeBox(
 				Painter.DrawElements,
 				LayerId + 5,
-				Painter.SectionGeometry.ToPaintGeometry(TextOffset - BoxPadding, TextSize + 2.0f * BoxPadding),
+				Painter.SectionGeometry.ToPaintGeometry(TextOffset - BoxPadding, FSlateLayoutTransform(TextSize + 2.0f * BoxPadding)),
 				FAppStyle::GetBrush("WhiteBrush"),
 				ESlateDrawEffect::None,
 				FLinearColor::Black.CopyWithNewOpacity(0.5f)
@@ -182,7 +182,7 @@ int32 FVolumeSection::OnPaintSection(FSequencerSectionPainter& Painter) const
 			FSlateDrawElement::MakeText(
 				Painter.DrawElements,
 				LayerId + 6,
-				Painter.SectionGeometry.ToPaintGeometry(TextOffset, TextSize),
+				Painter.SectionGeometry.ToPaintGeometry(TextOffset, FSlateLayoutTransform(FVector2D(TextSize))),
 				FrameString,
 				SmallLayoutFont,
 				DrawEffects,

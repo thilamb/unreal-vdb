@@ -33,7 +33,7 @@ void FVdbRenderBuffer::InitRHI()
 	FRHIResourceCreateInfo CreateInfo(TEXT("FVdbRenderBuffer"));
 	Buffer = RHICreateStructuredBuffer(Stride, ByteSize, BUF_Static | BUF_ShaderResource, CreateInfo);
 	
-	BufferSRV = RHICreateShaderResourceView(Buffer, Stride, PF_R32_UINT);
+	BufferSRV = RHICreateShaderResourceView(Buffer);
 
 	if (DataPtr)
 	{

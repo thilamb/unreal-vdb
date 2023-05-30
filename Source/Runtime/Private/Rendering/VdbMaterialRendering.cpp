@@ -31,6 +31,8 @@
 #include "SceneView.h"
 #include "ScenePrivate.h"
 #include "RenderUtils.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "TextureResource.h"
 
 #include "VolumeLighting.h"
 #include "VolumetricFog.h"
@@ -129,8 +131,10 @@ void FVdbMaterialRendering::InitDelegate()
 		IRendererModule* RendererModule = FModuleManager::GetModulePtr<IRendererModule>(RendererModuleName);
 		if (RendererModule)
 		{
+#if VDB_CAST_SHADOWS
 			ShadowDepthDelegate.BindRaw(this, &FVdbMaterialRendering::ShadowDepth_RenderThread);
 			ShadowDepthDelegateHandle = RendererModule->RegisterShadowDepthRenderDelegate(ShadowDepthDelegate);
+#endif
 
 			RenderDelegate.BindRaw(this, &FVdbMaterialRendering::Render_RenderThread);
 			// Render VDBs before or after Transparent objects
@@ -190,6 +194,7 @@ void FVdbMaterialRendering::CreateMeshBatch(const FSceneView* View, FMeshBatch& 
 	BatchElement.UserData = &UserData;
 }
 
+#if VDB_CAST_SHADOWS
 void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters& Parameters)
 {
 	// TODO LATER: manual culling I guess ?
@@ -318,6 +323,7 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 		DrawVdbProxies(TranslucentProxies, VdbUniformBuffer, true);
 	}
 }
+#endif
 
 void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Parameters)
 {
@@ -525,23 +531,16 @@ void SetupRenderPassParameters(
 
 	// Shadow data
 	VdbParameters->ForwardLightData = *ViewInfo->ForwardLightingResources.ForwardLightData;
-	if (VisibleLightInfo != nullptr)
+	VdbParameters->VirtualShadowMapId = VisibleLightInfo ? VisibleLightInfo->GetVirtualShadowMapId(ViewInfo) : INDEX_NONE;
+
+	const FProjectedShadowInfo* ProjectedShadowInfo = VisibleLightInfo ? GetShadowForInjectionIntoVolumetricFog(*VisibleLightInfo) : nullptr;
+	if (ProjectedShadowInfo != nullptr)
 	{
-		const FProjectedShadowInfo* ProjectedShadowInfo = GetShadowForInjectionIntoVolumetricFog(*VisibleLightInfo);
-		bool bDynamicallyShadowed = ProjectedShadowInfo != NULL;
-		if (bDynamicallyShadowed)
-		{
-			GetVolumeShadowingShaderParameters(GraphBuilder, *ViewInfo, LightSceneInfo, ProjectedShadowInfo, VdbParameters->VolumeShadowingShaderParameters);
-		}
-		else
-		{
-			SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters);
-		}
-		VdbParameters->VirtualShadowMapId = VisibleLightInfo->GetVirtualShadowMapId(ViewInfo);
+		SetVolumeShadowingShaderParameters(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters, *ViewInfo, LightSceneInfo, ProjectedShadowInfo);
 	}
 	else
 	{
-		SetVolumeShadowingDefaultShaderParametersGlobal(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters);
+		SetVolumeShadowingDefaultShaderParameters(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters);
 	}
 	PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
 

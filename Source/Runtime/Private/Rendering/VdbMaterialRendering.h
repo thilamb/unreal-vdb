@@ -61,7 +61,9 @@ private:
 	void InitDelegate();
 	void ReleaseDelegate();
 
+#if VDB_CAST_SHADOWS
 	void ShadowDepth_RenderThread(FShadowDepthRenderParameters& Parameters);
+#endif
 	void Render_RenderThread(FPostOpaqueRenderParameters& Parameters);
 
 	void RenderLights(
@@ -94,7 +96,9 @@ private:
 	TUniquePtr<class FVolumeMeshVertexFactory> VertexFactory;
 	FPostOpaqueRenderDelegate RenderDelegate;
 	FDelegateHandle RenderDelegateHandle;
+#if VDB_CAST_SHADOWS
 	FShadowDepthRenderDelegate ShadowDepthDelegate;
+#endif
 	FDelegateHandle ShadowDepthDelegateHandle;
 
 	UTextureRenderTarget2D* DefaultVdbRenderTarget = nullptr;

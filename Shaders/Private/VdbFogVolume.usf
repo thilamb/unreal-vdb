@@ -19,6 +19,15 @@
 #include "/Engine/Generated/Material.ush"
 #include "/Engine/Generated/VertexFactory.ush"
 
+#define DeferredLightUniforms VdbParams.DeferredLight
+#define LumenGIVolumeStruct VdbParams.LumenGIVolumeStruct
+#include "/Engine/Private/DeferredLightingCommon.ush"
+#include "/Engine/Private/LightDataUniforms.ush"
+#include "/Engine/Private/SHCommon.ush"
+#define FrontLayerTranslucencyReflectionsStruct LumenGIVolumeStruct
+#define RadianceCacheInterpolation LumenGIVolumeStruct
+#include "/Engine/Private/Lumen/LumenTranslucencyVolumeShared.ush"
+
 int4 CustomIntData0;
 int4 CustomIntData1;
 float4 CustomFloatData0;
@@ -66,15 +75,6 @@ Texture2D				BlackbodyColor; // curve atlas
 #include "/Plugin/VdbVolume/Private/VdbMaterial.ush"
 #include "/Plugin/VdbVolume/Private/VdbRaymarchingUtils.ush"
 
-#include "/Engine/Private/SHCommon.ush"
-#define FrontLayerTranslucencyReflectionsStruct VdbParams
-#define RadianceCacheInterpolation VdbParams
-#define LumenGIVolumeStruct VdbParams
-#ifndef IS_MATERIAL_SHADER
-	#define IS_MATERIAL_SHADER 1
-#endif
-#include "/Engine/Private/Lumen/LumenTranslucencyVolumeShared.ush"
-
 #define DIM_USE_LUMEN_GI 1 // TODO use permutations
 
 //-----------------------------------------------------------------------------------------------------------
@@ -111,7 +111,7 @@ float4 RaymarchFogVolume(
 	float3 Radiance = 0.0;
 
 	#if !MATERIAL_SHADINGMODEL_UNLIT
-		FDeferredLightData LightData = LoadLightData(VdbParams.LightType);
+		FDeferredLightData LightData = InitDeferredLightFromUniforms(VdbParams.LightType);
 
 		float3 LocalDirLight = WorldToIndexDirection(LightData.Direction, WorldToLocal, DensitySampler.GridBuffer, DensitySampler.Grid);
 		float CosThetaPhase = dot(LocalDirLight, Ray.Direction);

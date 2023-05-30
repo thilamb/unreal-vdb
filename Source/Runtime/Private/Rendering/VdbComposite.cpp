@@ -22,6 +22,8 @@
 #include "SceneView.h"
 #include "FogRendering.h"
 #include "VdbCommon.h"
+#include "SceneRendering.h"
+#include "DataDrivenShaderPlatformInfo.h"
 
 static TAutoConsoleVariable<int32> CVarVdbCompositeDebugMode(
 	TEXT("r.Vdb.DebugMode"), 0,

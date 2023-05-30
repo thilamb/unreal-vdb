@@ -21,6 +21,7 @@
 #include "ShaderParameters.h"
 #include "SceneView.h"
 #include "ShaderParameterStruct.h"
+#include "DataDrivenShaderPlatformInfo.h"
 
 // FogVolumes Vdb Denoiser (right now, it is just a simple blur proof of concept)
 class FDenoiseCS : public FGlobalShader
@@ -58,7 +59,9 @@ FRDGTexture* VdbDenoiser::ApplyDenoising(FRDGBuilder& GraphBuilder, FRDGTexture*
 	if (Method == EVdbDenoiserMethod::None || Method >= EVdbDenoiserMethod::Count)
 		return InputTexture;
 
-	FRDGTexture* VdbDenoiseRenderTexture = GraphBuilder.CreateTexture(InputTexture->Desc, TEXT("VdbDenoiseRenderTexture"));
+	FRDGTextureDesc TexDesc = InputTexture->Desc;
+	TexDesc.Flags |= TexCreate_UAV;
+	FRDGTexture* VdbDenoiseRenderTexture = GraphBuilder.CreateTexture(TexDesc, TEXT("VdbDenoiseRenderTexture"));
 	FRDGTextureUAV* TexUAV = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(VdbDenoiseRenderTexture));
 
 	auto* PassParameters = GraphBuilder.AllocParameters<FDenoiseCS::FParameters>();
