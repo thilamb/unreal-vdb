@@ -20,7 +20,7 @@
 
 class FVolumeRuntimeModule : public IModuleInterface
 {
-	typedef TSharedPtr<class FVdbMaterialRendering, ESPMode::ThreadSafe> TRenderExtensionPtr;
+	typedef TSharedPtr<class FVdbVolumeRendering, ESPMode::ThreadSafe> TRenderExtensionPtr;
 
 public:
 	virtual void StartupModule() override;

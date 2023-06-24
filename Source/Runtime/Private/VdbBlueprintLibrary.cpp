@@ -14,7 +14,7 @@
 
 #include "VdbBlueprintLibrary.h"
 #include "VolumeRuntimeModule.h"
-#include "Rendering/VdbMaterialRendering.h"
+#include "Rendering/VdbVolumeRendering.h"
 
 void UVdbBlueprintLibrary::SetDenoiserMethod(EVdbDenoiserMethod Method)
 {

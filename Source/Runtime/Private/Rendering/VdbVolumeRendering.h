@@ -1,4 +1,4 @@
-// Copyright 2022 Eidos-Montreal / Eidos-Sherbrooke
+// Copyright Thibault Lambert
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,23 +19,23 @@
 #include "SceneViewExtension.h"
 #include "VdbDenoiser.h"
 
-class FVdbMaterialSceneProxy;
+class FVdbVolumeSceneProxy;
 
-class FVdbMaterialRendering : public FSceneViewExtensionBase
+class FVdbVolumeRendering : public FSceneViewExtensionBase
 {
 public:
 
-	FVdbMaterialRendering(const FAutoRegister& AutoRegister);
+	FVdbVolumeRendering(const FAutoRegister& AutoRegister);
 
 	bool ShouldRenderVolumetricVdb() const;
 
 	void Init(UTextureRenderTarget2D* DefaultRenderTarget);
 	void Release();
 
-	void AddVdbProxy(FVdbMaterialSceneProxy* Proxy);
-	void RemoveVdbProxy(FVdbMaterialSceneProxy* Proxy);
+	void AddVdbProxy(FVdbVolumeSceneProxy* Proxy);
+	void RemoveVdbProxy(FVdbVolumeSceneProxy* Proxy);
 
-	void CreateMeshBatch(const FSceneView* View, struct FMeshBatch&, const FVdbMaterialSceneProxy*, struct FVdbVertexFactoryUserDataWrapper&, const class FMaterialRenderProxy*) const;
+	void CreateMeshBatch(const FSceneView* View, struct FMeshBatch&, const FVdbVolumeSceneProxy*, struct FVdbVertexFactoryUserDataWrapper&, const class FMaterialRenderProxy*) const;
 
 	//~ Setters
 	void SetDenoiserMethod(EVdbDenoiserMethod Method) { DenoiserMethod = Method; }
@@ -80,7 +80,7 @@ private:
 
 	void RenderLights(
 		// Object Data
-		FVdbMaterialSceneProxy* Proxy,
+		FVdbVolumeSceneProxy* Proxy,
 		bool Translucent,
 		// Scene data
 		const FPostOpaqueRenderParameters& Parameters,
@@ -90,7 +90,7 @@ private:
 
 	void RenderLight(
 		// Object data
-		FVdbMaterialSceneProxy* Proxy,
+		FVdbVolumeSceneProxy* Proxy,
 		bool Translucent,
 		// Light data
 		bool ApplyEmissionAndTransmittance,
@@ -105,7 +105,7 @@ private:
 		FRDGTexture* RenderTexture,
 		FRDGTexture* DepthRenderTexture);
 
-	TArray<FVdbMaterialSceneProxy*> VdbProxies;
+	TArray<FVdbVolumeSceneProxy*> VdbProxies;
 	TUniquePtr<class FVolumeMeshVertexBuffer> VertexBuffer;
 	TUniquePtr<class FVolumeMeshVertexFactory> VertexFactory;
 	FPostOpaqueRenderDelegate RenderPostOpaqueDelegate;

@@ -14,7 +14,7 @@
 
 #include "ActorFactoryVdbVolume.h"
 
-#include "VdbMaterialActor.h"
+#include "VdbVolumeActor.h"
 #include "VdbAssetComponent.h"
 #include "VdbVolumeAsset.h"
 
@@ -23,7 +23,7 @@ UActorFactoryVdbVolume::UActorFactoryVdbVolume(const FObjectInitializer& ObjectI
 : Super(ObjectInitializer)
 {
 	DisplayName = FText::FromString("Vdb Actor");
-	NewActorClass = AVdbMaterialActor::StaticClass();
+	NewActorClass = AVdbVolumeActor::StaticClass();
 	bUseSurfaceOrientation = true;
 	bShowInEditorQuickMenu = true;
 }
@@ -51,7 +51,7 @@ void UActorFactoryVdbVolume::PostSpawnActor(UObject* Asset, AActor* NewActor)
 	UVdbVolumeAsset* VdbAsset = CastChecked<UVdbVolumeAsset>(Asset);
 
 	// Change properties
-	AVdbMaterialActor* VdbActor = CastChecked<AVdbMaterialActor>(NewActor);
+	AVdbVolumeActor* VdbActor = CastChecked<AVdbVolumeActor>(NewActor);
 
 	UVdbAssetComponent* VdbMaterialComponent = VdbActor->GetVdbAssetComponent();
 	VdbMaterialComponent->UnregisterComponent();
@@ -64,7 +64,7 @@ void UActorFactoryVdbVolume::PostCreateBlueprint(UObject* Asset, AActor* CDO)
 	if (Asset != NULL && CDO != NULL)
 	{
 		UVdbVolumeAsset* VdbAsset = CastChecked<UVdbVolumeAsset>(Asset);
-		AVdbMaterialActor* VdbActor = CastChecked<AVdbMaterialActor>(CDO);
+		AVdbVolumeActor* VdbActor = CastChecked<AVdbVolumeActor>(CDO);
 		UVdbAssetComponent* VdbMaterialComponent = VdbActor->GetVdbAssetComponent();
 		VdbMaterialComponent->VdbAsset = VdbAsset;
 	}

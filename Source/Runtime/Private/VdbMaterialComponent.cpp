@@ -18,7 +18,7 @@
 #include "VdbVolumeBase.h"
 #include "VdbVolumeSequence.h"
 #include "VdbAssetComponent.h"
-#include "Rendering/VdbMaterialSceneProxy.h"
+#include "Rendering/VdbVolumeSceneProxy.h"
 #include "Curves/CurveLinearColorAtlas.h"
 
 #include "UObject/ConstructorHelpers.h"
@@ -58,7 +58,7 @@ FPrimitiveSceneProxy* UVdbMaterialComponent::CreateSceneProxy()
 	if (!MainVolume || !MainVolume->IsValid() || MainVolume->IsVectorGrid() || !GetMaterial(0))
 		return nullptr;
 
-	return new FVdbMaterialSceneProxy(VdbAssets, this);
+	return new FVdbVolumeSceneProxy(VdbAssets, this);
 }
 
 FBoxSphereBounds UVdbMaterialComponent::CalcBounds(const FTransform& LocalToWorld) const
@@ -77,7 +77,7 @@ FBoxSphereBounds UVdbMaterialComponent::CalcBounds(const FTransform& LocalToWorl
 
 void UVdbMaterialComponent::UpdateSceneProxy(uint32 FrameIndex)
 {
-	FVdbMaterialSceneProxy* VdbMaterialSceneProxy = static_cast<FVdbMaterialSceneProxy*>(SceneProxy);
+	FVdbVolumeSceneProxy* VdbMaterialSceneProxy = static_cast<FVdbVolumeSceneProxy*>(SceneProxy);
 	if (VdbMaterialSceneProxy == nullptr)
 	{
 		return;

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "VdbMaterialRendering.h"
+#include "VdbVolumeRendering.h"
 #include "VdbShaders.h"
-#include "VdbMaterialSceneProxy.h"
+#include "VdbVolumeSceneProxy.h"
 #include "VdbRenderBuffer.h"
 #include "VdbCommon.h"
 #include "VdbComposite.h"
@@ -23,8 +23,6 @@
 #include "SystemTextures.h"
 
 #include "LocalVertexFactory.h"
-//#include "MeshPassProcessor.h"
-//#include "MeshPassProcessor.inl"
 #include "VdbMeshPassProcessor.inl"
 
 #include "Modules\ModuleManager.h"
@@ -42,7 +40,7 @@ DECLARE_GPU_STAT_NAMED(StatVdbMaterial, TEXT("Vdb Material Rendering"));
 DECLARE_GPU_STAT_NAMED(StatVdbShadowDepthMaterial, TEXT("Vdb Shadow Depth Material Rendering"));
 
 void SetupRenderPassParameters(
-	FVdbMaterialSceneProxy* Proxy,
+	FVdbVolumeSceneProxy* Proxy,
 	FRDGBuilder& GraphBuilder,
 	FVdbShaderPS::FParameters* PassParameters,
 	// Light data
@@ -111,20 +109,20 @@ void SetupRenderPassParameters(
 }
 
 //-----------------------------------------------------------------------------
-//--- FVdbMaterialRendering
+//--- FVdbVolumeRendering
 //-----------------------------------------------------------------------------
 
-FVdbMaterialRendering::FVdbMaterialRendering(const FAutoRegister& AutoRegister)
+FVdbVolumeRendering::FVdbVolumeRendering(const FAutoRegister& AutoRegister)
 	: FSceneViewExtensionBase(AutoRegister)
 {
 }
 
-bool FVdbMaterialRendering::ShouldRenderVolumetricVdb() const
+bool FVdbVolumeRendering::ShouldRenderVolumetricVdb() const
 {
 	return FVdbCVars::CVarVolumetricVdb.GetValueOnRenderThread() && VertexFactory.IsValid();
 }
 
-void FVdbMaterialRendering::InitRendering()
+void FVdbVolumeRendering::InitRendering()
 {
 	check(IsInRenderingThread());
 
@@ -137,7 +135,7 @@ void FVdbMaterialRendering::InitRendering()
 }
 
 #define RELEASE_RESOURCE(A) if(A) { A->ReleaseResource(); A.Reset(); }
-void FVdbMaterialRendering::ReleaseRendering()
+void FVdbVolumeRendering::ReleaseRendering()
 {
 	check(IsInRenderingThread());
 
@@ -147,7 +145,7 @@ void FVdbMaterialRendering::ReleaseRendering()
 }
 #undef RELEASE_RESOURCE
 
-void FVdbMaterialRendering::Init(UTextureRenderTarget2D* DefaultRenderTarget)
+void FVdbVolumeRendering::Init(UTextureRenderTarget2D* DefaultRenderTarget)
 {
 	if (IsInRenderingThread())
 	{
@@ -164,7 +162,7 @@ void FVdbMaterialRendering::Init(UTextureRenderTarget2D* DefaultRenderTarget)
 	}
 }
 
-void FVdbMaterialRendering::Release()
+void FVdbVolumeRendering::Release()
 {
 	if (IsInRenderingThread())
 	{
@@ -180,19 +178,19 @@ void FVdbMaterialRendering::Release()
 	}
 }
 
-void FVdbMaterialRendering::InitVolumeMesh()
+void FVdbVolumeRendering::InitVolumeMesh()
 {
 	VertexBuffer = MakeUnique<FVolumeMeshVertexBuffer>();
 	VertexBuffer->InitResource();
 }
 
-void FVdbMaterialRendering::InitVertexFactory()
+void FVdbVolumeRendering::InitVertexFactory()
 {
 	VertexFactory = MakeUnique<FVolumeMeshVertexFactory>(ERHIFeatureLevel::SM5);
 	VertexFactory->Init(VertexBuffer.Get());
 }
 
-void FVdbMaterialRendering::InitDelegate()
+void FVdbVolumeRendering::InitDelegate()
 {
 	if (!RenderPostOpaqueDelegateHandle.IsValid())
 	{
@@ -201,12 +199,12 @@ void FVdbMaterialRendering::InitDelegate()
 		if (RendererModule)
 		{
 #if VDB_CAST_SHADOWS
-			ShadowDepthDelegate.BindRaw(this, &FVdbMaterialRendering::ShadowDepth_RenderThread);
+			ShadowDepthDelegate.BindRaw(this, &FVdbVolumeRendering::ShadowDepth_RenderThread);
 			ShadowDepthDelegateHandle = RendererModule->RegisterShadowDepthRenderDelegate(ShadowDepthDelegate);
 #endif
 
-			RenderPostOpaqueDelegate.BindRaw(this, &FVdbMaterialRendering::RenderPostOpaque_RenderThread);
-			RenderOverlayDelegate.BindRaw(this, &FVdbMaterialRendering::RenderOverlay_RenderThread);
+			RenderPostOpaqueDelegate.BindRaw(this, &FVdbVolumeRendering::RenderPostOpaque_RenderThread);
+			RenderOverlayDelegate.BindRaw(this, &FVdbVolumeRendering::RenderOverlay_RenderThread);
 			// Render VDBs before or after Transparent objects
 			RenderPostOpaqueDelegateHandle = RendererModule->RegisterPostOpaqueRenderDelegate(RenderPostOpaqueDelegate);
 			RenderOverlayDelegateHandle = RendererModule->RegisterOverlayRenderDelegate(RenderOverlayDelegate);
@@ -214,7 +212,7 @@ void FVdbMaterialRendering::InitDelegate()
 	}
 }
 
-void FVdbMaterialRendering::ReleaseDelegate()
+void FVdbVolumeRendering::ReleaseDelegate()
 {
 	if (RenderPostOpaqueDelegateHandle.IsValid())
 	{
@@ -235,7 +233,7 @@ void FVdbMaterialRendering::ReleaseDelegate()
 	}
 }
 
-void FVdbMaterialRendering::CreateMeshBatch(const FSceneView* View, FMeshBatch& MeshBatch, const FVdbMaterialSceneProxy* PrimitiveProxy, FVdbVertexFactoryUserDataWrapper& UserData, const FMaterialRenderProxy* MaterialProxy) const
+void FVdbVolumeRendering::CreateMeshBatch(const FSceneView* View, FMeshBatch& MeshBatch, const FVdbVolumeSceneProxy* PrimitiveProxy, FVdbVertexFactoryUserDataWrapper& UserData, const FMaterialRenderProxy* MaterialProxy) const
 {
 	const FPrimitiveViewRelevance& ViewRelevance = PrimitiveProxy->GetViewRelevance(View);
 
@@ -263,30 +261,30 @@ void FVdbMaterialRendering::CreateMeshBatch(const FSceneView* View, FMeshBatch& 
 }
 
 #if VDB_CAST_SHADOWS
-void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters& Parameters)
+void FVdbVolumeRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters& Parameters)
 {
 	// TODO LATER: manual culling I guess ?
 
 	const FSceneView* View = static_cast<const FSceneView*>(Parameters.ShadowDepthView);
 	const FMatrix& ViewMat = View->ShadowViewMatrices.GetViewMatrix();
 
-	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return !Proxy->IsTranslucent() && Proxy->IsVisible(View) && !Proxy->IsTemperatureOnly(); });
-	OpaqueProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
+	TArray<FVdbVolumeSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate([View](const FVdbVolumeSceneProxy* Proxy) { return !Proxy->IsTranslucent() && Proxy->IsVisible(View) && !Proxy->IsTemperatureOnly(); });
+	OpaqueProxies.Sort([ViewMat](const FVdbVolumeSceneProxy& Lhs, const FVdbVolumeSceneProxy& Rhs) -> bool
 		{
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
 			const FVector& RightProxyCenter = Rhs.GetBounds().GetSphere().Center;
 			return ViewMat.TransformPosition(LeftProxyCenter).Z < ViewMat.TransformPosition(RightProxyCenter).Z; // front to back
 		});
 
-	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate([View](const FVdbMaterialSceneProxy* Proxy) { return Proxy->IsTranslucent() && Proxy->IsVisible(View) && !Proxy->IsTemperatureOnly(); });
-	TranslucentProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
+	TArray<FVdbVolumeSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate([View](const FVdbVolumeSceneProxy* Proxy) { return Proxy->IsTranslucent() && Proxy->IsVisible(View) && !Proxy->IsTemperatureOnly(); });
+	TranslucentProxies.Sort([ViewMat](const FVdbVolumeSceneProxy& Lhs, const FVdbVolumeSceneProxy& Rhs) -> bool
 		{
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
 			const FVector& RightProxyCenter = Rhs.GetBounds().GetSphere().Center;
 			return ViewMat.TransformPosition(LeftProxyCenter).Z > ViewMat.TransformPosition(RightProxyCenter).Z; // back to front
 		});
 
-	auto DrawVdbProxies = [&](const TArray<FVdbMaterialSceneProxy*>& Proxies, TRDGUniformBufferRef<FVdbDepthShaderParams>& VdbUniformBuffer, bool Translucent)
+	auto DrawVdbProxies = [&](const TArray<FVdbVolumeSceneProxy*>& Proxies, TRDGUniformBufferRef<FVdbDepthShaderParams>& VdbUniformBuffer, bool Translucent)
 	{
 		FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
 
@@ -314,7 +312,7 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 
 				FRHITextureViewCache TexCache;
 
-				for (const FVdbMaterialSceneProxy* Proxy : Proxies)
+				for (const FVdbVolumeSceneProxy* Proxy : Proxies)
 				{
 					if (Proxy && Proxy->GetMaterial() && Proxy->GetDensityRenderResource())
 					{
@@ -393,17 +391,17 @@ void FVdbMaterialRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameter
 }
 #endif
 
-void FVdbMaterialRendering::RenderPostOpaque_RenderThread(FPostOpaqueRenderParameters& Parameters)
+void FVdbVolumeRendering::RenderPostOpaque_RenderThread(FPostOpaqueRenderParameters& Parameters)
 {
 	Render_RenderThread(Parameters, false);
 }
 
-void FVdbMaterialRendering::RenderOverlay_RenderThread(FPostOpaqueRenderParameters& Parameters)
+void FVdbVolumeRendering::RenderOverlay_RenderThread(FPostOpaqueRenderParameters& Parameters)
 {
 	Render_RenderThread(Parameters, true);
 }
 
-void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Parameters, bool PostTranslucents)
+void FVdbVolumeRendering::Render_RenderThread(FPostOpaqueRenderParameters& Parameters, bool PostTranslucents)
 {
 	if (!ShouldRenderVolumetricVdb())
 		return;
@@ -421,24 +419,24 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 	if (UsePathTracing && !PostTranslucents) // When using pathtracing only use overlay delegate render mode
 		return;
 
-	TArray<FVdbMaterialSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate(
-		[View, PostTranslucents, UsePathTracing](const FVdbMaterialSceneProxy* Proxy)
+	TArray<FVdbVolumeSceneProxy*> OpaqueProxies = VdbProxies.FilterByPredicate(
+		[View, PostTranslucents, UsePathTracing](const FVdbVolumeSceneProxy* Proxy)
 		{ 
 			return !Proxy->IsTranslucent() && Proxy->IsVisible(View) && (Proxy->RendersAfterTransparents() == PostTranslucents || UsePathTracing);
 		});
-	OpaqueProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool 
+	OpaqueProxies.Sort([ViewMat](const FVdbVolumeSceneProxy& Lhs, const FVdbVolumeSceneProxy& Rhs) -> bool 
 		{ 
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
 			const FVector& RightProxyCenter = Rhs.GetBounds().GetSphere().Center;
 			return ViewMat.TransformPosition(LeftProxyCenter).Z < ViewMat.TransformPosition(RightProxyCenter).Z; // front to back
 		});
 
-	TArray<FVdbMaterialSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate(
-		[View, PostTranslucents, UsePathTracing](const FVdbMaterialSceneProxy* Proxy)
+	TArray<FVdbVolumeSceneProxy*> TranslucentProxies = VdbProxies.FilterByPredicate(
+		[View, PostTranslucents, UsePathTracing](const FVdbVolumeSceneProxy* Proxy)
 		{ 
 			return Proxy->IsTranslucent() && Proxy->IsVisible(View) && (Proxy->RendersAfterTransparents() == PostTranslucents || UsePathTracing);
 		});
-	TranslucentProxies.Sort([ViewMat](const FVdbMaterialSceneProxy& Lhs, const FVdbMaterialSceneProxy& Rhs) -> bool
+	TranslucentProxies.Sort([ViewMat](const FVdbVolumeSceneProxy& Lhs, const FVdbVolumeSceneProxy& Rhs) -> bool
 		{
 			const FVector& LeftProxyCenter = Lhs.GetBounds().GetSphere().Center;
 			const FVector& RightProxyCenter = Rhs.GetBounds().GetSphere().Center;
@@ -466,7 +464,7 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 	if (!OpaqueProxies.IsEmpty())
 	{
 		SCOPE_CYCLE_COUNTER(STAT_VdbOpaque_RT);
-		for (FVdbMaterialSceneProxy* Proxy : OpaqueProxies)
+		for (FVdbVolumeSceneProxy* Proxy : OpaqueProxies)
 		{
 			RenderLights(Proxy, false, Parameters, VdbPathtrace, nullptr, nullptr);
 		}
@@ -504,7 +502,7 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 			AddClearDepthStencilPass(GraphBuilder, DepthTestTexture, ERenderTargetLoadAction::EClear, ERenderTargetLoadAction::ENoAction);
 		}
 
-		for (FVdbMaterialSceneProxy* Proxy : TranslucentProxies)
+		for (FVdbVolumeSceneProxy* Proxy : TranslucentProxies)
 		{
 			if (!VdbPathtrace.UsePathtracing || VdbPathtrace.NumAccumulations < (uint32)VdbPathtrace.MaxSPP)
 			{
@@ -535,9 +533,9 @@ void FVdbMaterialRendering::Render_RenderThread(FPostOpaqueRenderParameters& Par
 	}
 }
 
-void FVdbMaterialRendering::RenderLights(
+void FVdbVolumeRendering::RenderLights(
 	// Object Data
-	FVdbMaterialSceneProxy* Proxy,
+	FVdbVolumeSceneProxy* Proxy,
 	bool Translucent, 
 	// Scene data
 	const FPostOpaqueRenderParameters& Parameters,
@@ -611,9 +609,9 @@ void FVdbMaterialRendering::RenderLights(
 	}
 }
 
-void FVdbMaterialRendering::RenderLight(
+void FVdbVolumeRendering::RenderLight(
 	// Object data
-	FVdbMaterialSceneProxy* Proxy,
+	FVdbVolumeSceneProxy* Proxy,
 	bool Translucent,
 	// Light data
 	bool ApplyEmissionAndTransmittance,
@@ -738,7 +736,7 @@ void FVdbMaterialRendering::RenderLight(
 }
 
 
-void FVdbMaterialRendering::AddVdbProxy(FVdbMaterialSceneProxy* Proxy)
+void FVdbVolumeRendering::AddVdbProxy(FVdbVolumeSceneProxy* Proxy)
 {
 	ENQUEUE_RENDER_COMMAND(FAddVdbProxyCommand)(
 		[this, Proxy](FRHICommandListImmediate& RHICmdList)
@@ -748,7 +746,7 @@ void FVdbMaterialRendering::AddVdbProxy(FVdbMaterialSceneProxy* Proxy)
 		});
 }
 
-void FVdbMaterialRendering::RemoveVdbProxy(FVdbMaterialSceneProxy* Proxy)
+void FVdbVolumeRendering::RemoveVdbProxy(FVdbVolumeSceneProxy* Proxy)
 {
 	ENQUEUE_RENDER_COMMAND(FRemoveVdbProxyCommand)(
 		[this, Proxy](FRHICommandListImmediate& RHICmdList)
@@ -761,10 +759,10 @@ void FVdbMaterialRendering::RemoveVdbProxy(FVdbMaterialSceneProxy* Proxy)
 		});
 }
 
-void FVdbMaterialRendering::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
+void FVdbVolumeRendering::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
 	// Reset visibility on all registered FVdbProxies, before SceneVisibility is computed 
-	for (FVdbMaterialSceneProxy* Proxy : VdbProxies)
+	for (FVdbVolumeSceneProxy* Proxy : VdbProxies)
 	{
 		Proxy->ResetVisibility();
 		Proxy->UpdateCurveAtlasTex();
@@ -772,7 +770,7 @@ void FVdbMaterialRendering::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphB
 }
 
 // Called on game thread when view family is about to be rendered.
-void FVdbMaterialRendering::BeginRenderViewFamily(FSceneViewFamily& InViewFamily)
+void FVdbVolumeRendering::BeginRenderViewFamily(FSceneViewFamily& InViewFamily)
 {
 	if (DefaultVdbRenderTarget)
 	{

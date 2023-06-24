@@ -14,27 +14,11 @@
 
 #pragma once
 
-//#include "VdbMaterialRendering.h"
+
 #include "VdbShaders.h"
-//#include "VdbMaterialSceneProxy.h"
-//#include "VdbRenderBuffer.h"
-//#include "VdbCommon.h"  
-//#include "VdbComposite.h"
-//#include "VolumeMesh.h"
-//#include "SceneTexturesConfig.h"
-//#include "SystemTextures.h"
-//
-//#include "LocalVertexFactory.h"
 #include "MeshPassProcessor.h"
 #include "MeshPassProcessor.inl"
 #include "ScenePrivate.h"
-//#include "Modules\ModuleManager.h"
-//#include "SceneView.h"
-//#include "ScenePrivate.h"
-//#include "RenderUtils.h"
-//
-//#include "VolumeLighting.h"
-//#include "VolumetricFog.h"
 
 //-----------------------------------------------------------------------------
 //--- FVdbDepthMeshProcessor

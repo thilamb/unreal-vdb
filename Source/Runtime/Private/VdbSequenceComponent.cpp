@@ -17,8 +17,8 @@
 #include "VdbCommon.h"
 #include "VdbAssetComponent.h"
 #include "VdbVolumeSequence.h"
-#include "Rendering/VdbMaterialSceneProxy.h"
-#include "Rendering/VdbMaterialRendering.h"
+#include "Rendering/VdbVolumeSceneProxy.h"
+#include "Rendering/VdbVolumeRendering.h"
 
 #include "RendererInterface.h"
 #include "UObject/ConstructorHelpers.h"

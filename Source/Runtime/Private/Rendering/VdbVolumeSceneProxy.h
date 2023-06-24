@@ -1,4 +1,4 @@
-// Copyright 2022 Eidos-Montreal / Eidos-Sherbrooke
+// Copyright Thibault Lambert
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@ class UVdbMaterialComponent;
 class FVdbRenderBuffer;
 
 // Render Thread equivalent of VdbMaterialComponent
-class FVdbMaterialSceneProxy : public FPrimitiveSceneProxy
+class FVdbVolumeSceneProxy : public FPrimitiveSceneProxy
 {
 public:
-	FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetComponent, const UVdbMaterialComponent* InComponent);
-	virtual ~FVdbMaterialSceneProxy() = default;
+	FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetComponent, const UVdbMaterialComponent* InComponent);
+	virtual ~FVdbVolumeSceneProxy() = default;
 
 	FVector3f GetIndexMin() const { return IndexMin; }
 	FVector3f GetIndexSize() const { return IndexSize; }
@@ -71,7 +71,7 @@ protected:
 
 private:
 	
-	TSharedPtr<class FVdbMaterialRendering, ESPMode::ThreadSafe> VdbMaterialRenderExtension;
+	TSharedPtr<class FVdbVolumeRendering, ESPMode::ThreadSafe> VdbMaterialRenderExtension;
 
 	// Fixed attributes
 	const UVdbMaterialComponent* VdbMaterialComponent = nullptr;

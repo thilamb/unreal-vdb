@@ -15,7 +15,7 @@
 #include "VolumeRuntimeModule.h"
 #include "VdbCommon.h"
 #include "VdbAssetComponentDetailsCustomization.h"
-#include "Rendering/VdbMaterialRendering.h"
+#include "Rendering/VdbVolumeRendering.h"
 
 #include "Interfaces/IPluginManager.h"
 #include "ShaderCore.h"
@@ -69,7 +69,7 @@ FVolumeRuntimeModule::TRenderExtensionPtr FVolumeRuntimeModule::GetOrCreateRende
 {
 	if (!VdbMaterialRenderExtension.IsValid())
 	{
-		VdbMaterialRenderExtension = FSceneViewExtensions::NewExtension<FVdbMaterialRendering>();
+		VdbMaterialRenderExtension = FSceneViewExtensions::NewExtension<FVdbVolumeRendering>();
 		VdbMaterialRenderExtension->Init(DefaultRenderTarget);
 	}
 	return VdbMaterialRenderExtension;

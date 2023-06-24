@@ -1,4 +1,4 @@
-// Copyright 2022 Eidos-Montreal / Eidos-Sherbrooke
+// Copyright Thibault Lambert
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "VdbMaterialSceneProxy.h"
+#include "VdbVolumeSceneProxy.h"
 #include "VdbAssetComponent.h"
 #include "VdbMaterialComponent.h"
 #include "VdbVolumeStatic.h"
@@ -21,13 +21,13 @@
 #include "VdbSequenceComponent.h"
 #include "VdbVolumeSequence.h"
 #include "Rendering/VolumeMesh.h"
-#include "Rendering/VdbMaterialRendering.h"
+#include "Rendering/VdbVolumeRendering.h"
 #include "Materials/Material.h"
 #include "Algo/AnyOf.h"
 #include "Curves/CurveLinearColorAtlas.h"
 #include "TextureResource.h"
 
-FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetComponent, const UVdbMaterialComponent* InComponent)
+FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetComponent, const UVdbMaterialComponent* InComponent)
 	: FPrimitiveSceneProxy(InComponent)
 	, VdbMaterialComponent(InComponent)
 	, Material(InComponent->GetMaterial(0))
@@ -81,8 +81,8 @@ FVdbMaterialSceneProxy::FVdbMaterialSceneProxy(const UVdbAssetComponent* AssetCo
 }
 
 // This setups associated volume mesh for built-in Unreal passes. 
-// Actual rendering is prepared FVdbMaterialRendering::PostOpaque_RenderThread.
-void FVdbMaterialSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
+// Actual rendering is prepared FVdbVolumeRendering::PostOpaque_RenderThread.
+void FVdbVolumeSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
 {
 	SCOPE_CYCLE_COUNTER(STAT_VdbSceneProxy_GetDynamicMeshElements);
 	check(IsInRenderingThread());
@@ -118,7 +118,7 @@ void FVdbMaterialSceneProxy::GetDynamicMeshElements(const TArray<const FSceneVie
 	}
 }
 
-FPrimitiveViewRelevance FVdbMaterialSceneProxy::GetViewRelevance(const FSceneView* View) const
+FPrimitiveViewRelevance FVdbVolumeSceneProxy::GetViewRelevance(const FSceneView* View) const
 {
 	FPrimitiveViewRelevance Result;
 	Result.bDrawRelevance = IsShown(View);
@@ -131,27 +131,27 @@ FPrimitiveViewRelevance FVdbMaterialSceneProxy::GetViewRelevance(const FSceneVie
 	return Result;
 }
 
-SIZE_T FVdbMaterialSceneProxy::GetTypeHash() const
+SIZE_T FVdbVolumeSceneProxy::GetTypeHash() const
 {
 	static size_t UniquePointer;
 	return reinterpret_cast<size_t>(&UniquePointer);
 }
 
-void FVdbMaterialSceneProxy::CreateRenderThreadResources()
+void FVdbVolumeSceneProxy::CreateRenderThreadResources()
 {
 	FPrimitiveSceneProxy::CreateRenderThreadResources();
 
 	VdbMaterialRenderExtension->AddVdbProxy(this);
 }
 
-void FVdbMaterialSceneProxy::DestroyRenderThreadResources()
+void FVdbVolumeSceneProxy::DestroyRenderThreadResources()
 {
 	FPrimitiveSceneProxy::DestroyRenderThreadResources();
 
 	VdbMaterialRenderExtension->RemoveVdbProxy(this);
 }
 
-void FVdbMaterialSceneProxy::Update(const FMatrix44f& InIndexToLocal, const FVector3f& InIndexMin, const FVector3f& InIndexSize, FVdbRenderBuffer* PrimRenderBuffer, FVdbRenderBuffer* SecRenderBuffer, FVdbRenderBuffer* TerRenderBuffer)
+void FVdbVolumeSceneProxy::Update(const FMatrix44f& InIndexToLocal, const FVector3f& InIndexMin, const FVector3f& InIndexSize, FVdbRenderBuffer* PrimRenderBuffer, FVdbRenderBuffer* SecRenderBuffer, FVdbRenderBuffer* TerRenderBuffer)
 {
 	IndexToLocal = InIndexToLocal;
 	IndexMin = InIndexMin;
@@ -161,13 +161,13 @@ void FVdbMaterialSceneProxy::Update(const FMatrix44f& InIndexToLocal, const FVec
 	ColorRenderBuffer = TerRenderBuffer;
 }
 
-void FVdbMaterialSceneProxy::UpdateCurveAtlasTex()
+void FVdbVolumeSceneProxy::UpdateCurveAtlasTex()
 {
 	// Doing this every frame allows realtime preview and update when modifying color curves
 	CurveAtlasTex = CurveAtlas ? CurveAtlas->GetResource() : nullptr;
 }
 
-FRDGTextureRef FVdbMaterialSceneProxy::GetOrCreateRenderTarget(FRDGBuilder& GraphBuilder, const FIntPoint& RtSize, bool EvenFrame)
+FRDGTextureRef FVdbVolumeSceneProxy::GetOrCreateRenderTarget(FRDGBuilder& GraphBuilder, const FIntPoint& RtSize, bool EvenFrame)
 {
 	if (!OffscreenRenderTarget[EvenFrame].IsValid() || OffscreenRenderTarget[EvenFrame]->GetDesc().Extent != RtSize)
 	{

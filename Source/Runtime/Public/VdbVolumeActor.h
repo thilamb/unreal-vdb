@@ -1,4 +1,4 @@
-// Copyright 2022 Eidos-Montreal / Eidos-Sherbrooke
+// Copyright Thibault Lambert
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include "VdbCommon.h"
 #include "VolumeStreamingManager.h"
 
-#include "VdbMaterialActor.generated.h"
+#include "VdbVolumeActor.generated.h"
 
 class FVolumeRenderInfos;
 class UVdbSequenceComponent;
@@ -27,7 +27,7 @@ class UVdbVolumeBase;
 
 // Sparse Volumetric VDB actor, using Unreal's material system
 UCLASS(ClassGroup = Rendering, HideCategories = (Activation, Input, Physics, Materials, Collision, LOD, HLOD, Mobile, Navigation, VirtualTexture) , Meta = (ComponentWrapperClass))
-class VOLUMERUNTIME_API AVdbMaterialActor : public AActor
+class VOLUMERUNTIME_API AVdbVolumeActor : public AActor
 {
 	GENERATED_UCLASS_BODY()
 

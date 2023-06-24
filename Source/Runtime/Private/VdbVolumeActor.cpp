@@ -1,4 +1,4 @@
-// Copyright 2022 Eidos-Montreal / Eidos-Sherbrooke
+// Copyright Thibault Lambert
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "VdbMaterialActor.h"
+#include "VdbVolumeActor.h"
 
 #include "VdbCommon.h"
 #include "VdbVolumeBase.h"
@@ -20,7 +20,7 @@
 #include "VdbMaterialComponent.h"
 #include "VdbSequenceComponent.h"
 
-AVdbMaterialActor::AVdbMaterialActor(const FObjectInitializer& ObjectInitializer)
+AVdbVolumeActor::AVdbVolumeActor(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	AssetComponent = CreateDefaultSubobject<UVdbAssetComponent>(TEXT("AssetComponent"));
@@ -32,14 +32,10 @@ AVdbMaterialActor::AVdbMaterialActor(const FObjectInitializer& ObjectInitializer
 	SeqComponent->SetVdbAssets(AssetComponent);
 
 	RootComponent = MaterialComponent;
-
-	//// Force a 90deg rotation to fit with Unreal coordinate system (left handed, z-up)
-	//FTransform Transform(FRotator(0.0f, 0.0f, -90.0f));
-	//MaterialComponent->SetWorldTransform(Transform);
 }
 
 #if WITH_EDITOR
-bool AVdbMaterialActor::GetReferencedContentObjects(TArray<UObject*>& Objects) const
+bool AVdbVolumeActor::GetReferencedContentObjects(TArray<UObject*>& Objects) const
 {
 	Super::GetReferencedContentObjects(Objects);
 
