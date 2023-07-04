@@ -201,6 +201,8 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 
 			for (FVdbGridInfoPtr GridInfo : GridsInfo)
 			{
+				bool bCancelGridImport = false;
+
 				// Parse sequence for each grid
 				if (GridInfo->ShouldImport)
 				{
@@ -255,18 +257,28 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 								FMemory::Memcpy(NewChunkData, StreamedDataTempBytes.GetData(), StreamedDataTempBytes.Num());
 								Chunk->BulkData.Unlock();
 							}
+							else
+							{
+								UE_LOG(LogVdbImporter, Error, TEXT("NanoVDB couldn't load VDB grid '%s' at frame %d. This will not stop file import, but grid '%s' will not be imported."), *GridInfo->GridName.ToString(), FrameNumber, *GridInfo->GridName.ToString());
+								bCancelGridImport = true;
+								break;
+							}
 						}
 						else
 						{
-							UE_LOG(LogVdbImporter, Warning, TEXT("Sequence frame %d has an invalid VDB grid. This will not stop import, but the result sequence will be incomplete."), FrameNumber);
+							UE_LOG(LogVdbImporter, Error, TEXT("VDB grid '%s' is invalid at frame %d. This will not stop file import, but grid '%s' will not be imported."), *GridInfo->GridName.ToString(), FrameNumber, *GridInfo->GridName.ToString());
+							bCancelGridImport = true;
+							break;
 						}
-
 					}
 
-					VolumeSequence->FinalizeImport(Filename);
-					ResultAssets.Add(VolumeSequence);
-					VdbAsset->GetAssetImportData()->Update(Filename);
-					VdbAsset->VdbVolumes.Add(VolumeSequence);
+					if (!bCancelGridImport)
+					{
+						VolumeSequence->FinalizeImport(Filename);
+						ResultAssets.Add(VolumeSequence);
+						VdbAsset->GetAssetImportData()->Update(Filename);
+						VdbAsset->VdbVolumes.Add(VolumeSequence);
+					}
 				}
 			}
 		}
