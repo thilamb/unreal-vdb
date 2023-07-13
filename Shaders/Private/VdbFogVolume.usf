@@ -356,7 +356,7 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 
 	// ------------------------------------------------------------------------
 	// Trace rays and accumulate
-	
+	LOOP
 	for (uint SampleIndex = 0; SampleIndex < SAMPLES_PER_PIXEL; ++SampleIndex)
 	{
 		RandomSequence RandSequence;
