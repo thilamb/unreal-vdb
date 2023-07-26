@@ -76,6 +76,7 @@ private:
 	// Fixed attributes
 	const UVdbMaterialComponent* VdbMaterialComponent = nullptr;
 	class UMaterialInterface* Material = nullptr;
+	FMaterialRelevance MaterialRelevance;
 	bool LevelSet;
 	bool TranslucentLevelSet;
 	bool ImprovedSkylight;

@@ -1,0 +1,193 @@
+// Copyright Thibault Lambert
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http ://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// needs to before Common.usf
+#define SPHERICAL_OPACITY_FOR_SHADOW_DEPTHS 1
+
+#define SCENE_TEXTURES_DISABLED 1
+
+// Enable Strata only when a material is specifying a strata material is specified.
+#if !MATERIAL_IS_STRATA && STRATA_ENABLED
+	#undef STRATA_ENABLED
+	#define STRATA_ENABLED 0
+#endif
+
+//#include "/Engine/Private/Nanite/NanitePackedNaniteView.ush"
+#include "/Engine/Private/Common.ush"
+
+// Reroute SceneTexturesStruct uniform buffer references to the shadow depth pass uniform buffer
+#define PassStruct TranslucentDepthPass
+#define SceneTexturesStruct TranslucentDepthPass.SceneTextures 
+
+#include "/Engine/Generated/Material.ush"
+#include "/Engine/Generated/VertexFactory.ush"
+
+int4 CustomIntData0;
+int4 CustomIntData1;
+float4 CustomFloatData0;
+float4 CustomFloatData1;
+float4 CustomFloatData2;
+StructuredBuffer<uint> DensityVdbBuffer;
+StructuredBuffer<uint> TemperatureVdbBuffer;
+StructuredBuffer<uint> ColorVdbBuffer;
+Texture2D BlackbodyColor; // curve atlas
+
+// I can't make a custom MaterialExpression from a plugin.
+// It's far from ideal but I have to adapt and use a 
+// mix of material params, and component params.
+#define MAX_NUM_STEPS uint(CustomIntData0.x)
+#define SAMPLES_PER_PIXEL uint(CustomIntData0.y)
+#define SAMPLES_PER_PIXEL_FLOAT float(CustomIntData0.y)
+#define COLORED_TRANSMITTANCE bool(CustomIntData0.z) 
+#define TEMPORAL_NOISE bool(CustomIntData0.w) 
+#define CURVE_INDEX CustomIntData1.x
+#define CURVE_HEIGHT CustomIntData1.y
+#define TRANSLUCENT_LEVEL_SET CustomIntData1.z
+#define LOCAL_STEP_SIZE CustomFloatData0.x
+#define SHADOW_STEP_SIZE_MULT CustomFloatData0.y
+#define VOXEL_SIZE CustomFloatData0.z
+#define JITTER_MULT 0.0 // force no jittering
+#define ANISOTROPY CustomFloatData1.x
+#define ALBEDO CustomFloatData1.y
+#define BLACKBODY_INTENSITY CustomFloatData1.z
+#define BLACKBODY_TEMPERATURE CustomFloatData1.w
+#define DENSITY_MULT CustomFloatData2.x
+#define VOLUME_PADDING CustomFloatData2.y
+#define AMBIENT CustomFloatData2.z
+
+#define SAMPLING_FLOAT ReadValue
+#define SAMPLING_VECTOR ReadValueVec3f
+#if USE_TRILINEAR_SAMPLING
+	#define SAMPLING_FLOAT_FILTERING TrilinearSampling
+	#define SAMPLING_VECTOR_FILTERING TrilinearSamplingVec3f
+#else
+	#define SAMPLING_FLOAT_FILTERING SAMPLING_FLOAT
+	#define SAMPLING_VECTOR_FILTERING SAMPLING_VECTOR
+#endif
+
+#include "/Plugin/VdbVolume/Private/VdbCommon.ush"
+#include "/Plugin/VdbVolume/Private/VdbRaymarchingUtils.ush"
+#include "/Plugin/VdbVolume/Private/VdbShadowDepthCommon.ush"
+
+struct FTranslucencyShadowDepthVSToPS
+{
+	FVertexFactoryInterpolantsVSToPS FactoryInterpolants;
+	float ShadowDepth : TEXCOORD6;
+	float4 PixelPosition : TEXCOORD7;
+};
+
+float4 SetShadowDepthOutputs(float4 WorldPosition, out float ShadowDepth)
+{
+	float4 OutPosition = mul(WorldPosition, PassStruct.ProjectionMatrix);
+
+	// Clamp the vertex to the near plane if it is in front of the near plane
+	// This has problems if some vertices of a triangle get clamped and others do not, also causes artifacts with non-ortho projections
+	if (PassStruct.bClampToNearPlane && OutPosition.z < 0)
+	{
+		OutPosition.z = 0.000001f;
+		OutPosition.w = 1.0f;
+	}
+
+#if PERSPECTIVE_CORRECT_DEPTH
+		ShadowDepth = OutPosition.z;
+#else
+		float InvMaxSubjectDepth = PassStruct.InvMaxSubjectDepth;
+		//const float InvMaxSubjectDepth = PassStruct.ShadowParams.w;
+
+		// Output linear, normalized depth
+		ShadowDepth = OutPosition.z * InvMaxSubjectDepth;
+		OutPosition.z = ShadowDepth * OutPosition.w;
+#endif
+	
+	return OutPosition;
+}
+
+//-----------------------------------------------------------------------------------------------------------
+#if VERTEXSHADER
+//-----------------------------------------------------------------------------------------------------------
+
+void MainVS(
+	FVertexFactoryInput Input,
+	out FTranslucencyShadowDepthVSToPS OutParameters,
+	out float4 OutPosition : SV_POSITION
+	)
+{
+	ResolvedView = ResolveView();
+
+	FVertexFactoryIntermediates VFIntermediates = GetVertexFactoryIntermediates(Input);
+	float4 WorldPos = VertexFactoryGetWorldPosition(Input, VFIntermediates);
+	float3x3 TangentToLocal = VertexFactoryGetTangentToLocal(Input, VFIntermediates);
+	FMaterialVertexParameters VertexParameters = GetMaterialVertexParameters(Input, VFIntermediates, WorldPos.xyz, TangentToLocal);
+	const float3 WorldNormal = VertexFactoryGetWorldNormal(Input, VFIntermediates);
+
+	OutPosition = SetShadowDepthOutputs(WorldPos, OutParameters.ShadowDepth);
+
+	OutParameters.FactoryInterpolants = VertexFactoryGetInterpolantsVSToPS(Input, VFIntermediates, VertexParameters);
+	OutParameters.PixelPosition = WorldPos;
+}
+
+//-----------------------------------------------------------------------------------------------------------
+#elif PIXELSHADER
+//-----------------------------------------------------------------------------------------------------------
+
+/** Pixel shader used to accumulate layer opacities in different channels based on the first translucent layer's depth. */
+void MainPS(
+	FTranslucencyShadowDepthVSToPS Inputs,
+	in float4 SvPosition : SV_Position,		// after all interpolators
+	out float4 OutColor0 : SV_Target0,
+	out float4 OutColor1 : SV_Target1
+	// out float OutDepth : SV_DEPTH
+	)
+{
+	ResolvedView = ResolveView();
+
+	// VDB Transmittance computation
+	float3 LastIntersection = 0.0;
+	float3 Transmittance = GetVdbTransmittance(
+		Inputs.FactoryInterpolants, 
+		SvPosition, 
+		LastIntersection);
+
+	float Density = 1.0 - Average(Transmittance);
+	Density *= GetMaterialTranslucentShadowDensityScale();
+
+	clip(Density - 1.0f / 255.0f);
+
+	float ShadowDepth = Inputs.ShadowDepth;
+#if PERSPECTIVE_CORRECT_DEPTH
+	/** Used to normalize the outputted depth */
+	ShadowDepth *= PassStruct.InvMaxSubjectDepth;
+#endif
+	//ShadowDepth += TranslucentShadowStartOffset;
+
+	// Needs to match the corresponding define in ShadowProjectionCommon.usf
+#define USE_FOURIER_OPACITY_MAP 1
+#if USE_FOURIER_OPACITY_MAP
+	// Fourier opacity shadow map
+	float3 FrequencyScales0 = 2.0 * PI * float3(1, 2, 3);
+
+	// Calculate the sin and cos wave scales for each frequency based on the current fragment's depth
+	float3 CosCoefficients0;
+	float3 SinCoefficients0;
+	sincos(FrequencyScales0 * ShadowDepth, SinCoefficients0, CosCoefficients0);
+
+	float IntegratedDensity = -2 * log(max(1.0 - Density, .00001f));
+
+	// X stores the cos coefficient at depth 0, which simplifies to just IntegratedDensity
+	OutColor0 = float4(IntegratedDensity, IntegratedDensity * CosCoefficients0);
+	OutColor1 = float4(0, IntegratedDensity * SinCoefficients0);
+#endif // USE_FOURIER_OPACITY_MAP
+}
+
+#endif

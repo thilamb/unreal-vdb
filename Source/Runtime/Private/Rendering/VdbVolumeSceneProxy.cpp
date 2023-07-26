@@ -31,6 +31,7 @@ FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetCompon
 	: FPrimitiveSceneProxy(InComponent)
 	, VdbMaterialComponent(InComponent)
 	, Material(InComponent->GetMaterial(0))
+	, MaterialRelevance(Material->GetRelevance_Concurrent(GetScene().GetFeatureLevel()))
 {
 	LevelSet = AssetComponent->GetVdbClass() == EVdbClass::SignedDistance;
 	TranslucentLevelSet = LevelSet && InComponent->TranslucentLevelSet;
@@ -66,7 +67,7 @@ FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetCompon
 	float VoxelSize = MainVolume->GetVoxelSize();
 	CustomFloatData0 = FVector4f(InComponent->LocalStepSize, InComponent->ShadowStepSizeMultiplier, VoxelSize, InComponent->Jittering);
 	CustomFloatData1 = FVector4f(InComponent->Anisotropy, InComponent->Albedo, InComponent->BlackbodyIntensity, (CurveIndex == INDEX_NONE) ? InComponent->BlackbodyTemperature : InComponent->TemperatureMultiplier);
-	CustomFloatData2 = FVector4f(InComponent->DensityMultiplier, InComponent->VolumePadding, InComponent->Ambient, InComponent->ShadowThreshold);
+	CustomFloatData2 = FVector4f(InComponent->DensityMultiplier, InComponent->VolumePadding, InComponent->Ambient, 0.f);
 
 	auto FillValue = [AssetComponent](const UVdbVolumeBase* Base, FVdbRenderBuffer*& Buffer)
 	{
@@ -128,6 +129,9 @@ FPrimitiveViewRelevance FVdbVolumeSceneProxy::GetViewRelevance(const FSceneView*
 	Result.bRenderInMainPass = ShouldRenderInMainPass();
 	Result.bUsesLightingChannels = GetLightingChannelMask() != GetDefaultLightingChannelMask();
 	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
+	Result.bTranslucentSelfShadow = bCastVolumetricTranslucentShadow;
+	MaterialRelevance.SetPrimitiveViewRelevance(Result);
+	Result.bVelocityRelevance = DrawsVelocity() && Result.bOpaque && Result.bRenderInMainPass;
 	return Result;
 }
 

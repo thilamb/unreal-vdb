@@ -35,7 +35,6 @@
 
 #include "/Engine/Generated/Material.ush"
 #include "/Engine/Generated/VertexFactory.ush"
-#include "/Engine/Private/ShadowDepthCommon.ush"
 
 #if VIRTUAL_SM_ENABLED
 	#include "/Engine/Private/Nanite/NaniteDataDecode.ush"
@@ -82,7 +81,6 @@ Texture2D BlackbodyColor; // curve atlas
 #define DENSITY_MULT CustomFloatData2.x
 #define VOLUME_PADDING CustomFloatData2.y
 #define AMBIENT CustomFloatData2.z
-#define SHADOW_THRESHOLD CustomFloatData2.w
 
 #define SAMPLING_FLOAT ReadValue
 #define SAMPLING_VECTOR ReadValueVec3f
@@ -96,6 +94,7 @@ Texture2D BlackbodyColor; // curve atlas
 
 #include "/Plugin/VdbVolume/Private/VdbCommon.ush"
 #include "/Plugin/VdbVolume/Private/VdbRaymarchingUtils.ush"
+#include "/Plugin/VdbVolume/Private/VdbShadowDepthCommon.ush"
 
 void SetShadowDepthOutputs(
 	float4x4 WorldToClipMatrix,
@@ -154,56 +153,6 @@ void SetShadowDepthOutputs(
 	ShadowDepth = AdjustedDepth;
 	OutPosition.z = AdjustedDepth;
 #endif
-}
-
-VdbRay PrepareShadowRayFromPixel(
-	pnanovdb_buf_t grid_buf, 
-	pnanovdb_grid_handle_t grid, 
-	float4 SvPosition,
-#if ONEPASS_POINTLIGHT_SHADOW
-	uint LayerIndex,
-#endif
-	float4x4 WorldToLocal, 
-	float DeviceZ, 
-	bool Forward)
-{
-	float4 ClipPosition = SvPositionToScreenPosition(SvPosition) / SvPosition.w; // NDC to Clip
-
-	// Light space
-#if ONEPASS_POINTLIGHT_SHADOW
-	float4 Near = mul(float4(ClipPosition.xy, NearDepthValue, 1.0), VdbDepthParams.CubeShadowClipToTranslatedWorld[LayerIndex]);
-	float4 Far = mul(float4(ClipPosition.xy, DeviceZ, 1.0), VdbDepthParams.CubeShadowClipToTranslatedWorld[LayerIndex]);
-#else
-	float4 Near = mul(float4(ClipPosition.xy, NearDepthValue, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld);
-	float4 Far = mul(float4(ClipPosition.xy, DeviceZ, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld);
-#endif
-
-	float3 Start = Near.xyz / Near.w;
-	Start -= LWCHackToFloat(VdbDepthParams.ShadowPreViewTranslation);
-	float3 Stop = Far.xyz / Far.w;
-	Stop -= LWCHackToFloat(VdbDepthParams.ShadowPreViewTranslation);
-
-	// Index space
-	float3 Origin = WorldToIndexPosition(Start, WorldToLocal, grid_buf, grid);
-	float3 End = WorldToIndexPosition(Stop, WorldToLocal, grid_buf, grid);
-
-	float Dist = length(End - Origin);
-
-	VdbRay Ray;
-	if (Forward)
-	{
-		Ray.Origin = Origin;
-		Ray.Direction = (End - Origin) / Dist;
-	}
-	else
-	{
-		Ray.Origin = End;
-		Ray.Direction = (Origin - End) / Dist;
-	}
-	Ray.TMin = 0.0001f;
-	Ray.TMax = POSITIVE_INFINITY;
-
-	return Ray;
 }
 
 /**
@@ -355,92 +304,6 @@ void MainVS(
 #elif PIXELSHADER
 //-----------------------------------------------------------------------------------------------------------
 
-bool RaymarchFogVolume(
-	VdbSampler DensitySampler,
-	VdbRay Ray,
-	FMaterialPixelParameters MaterialParameters,
-	RandomSequence RandSequence,
-	float4x4 LocalToWorld,
-	float4x4 WorldToLocal,
-	float4 SvPosition,
-	out float3 FirstIntersection)
-{
-	float MinDistLocal = 0.0;
-	float3 Transmittance = 0.0;
-	pnanovdb_vec3_t iPos = 0.0;
-
-#if LEVEL_SET
-	if (!TRANSLUCENT_LEVEL_SET)
-	{
-		ZeroCrossingHit HitResults;
-		if (!GetNextIntersection(DensitySampler, Ray, HitResults))
-		{
-			Transmittance = 1.0;
-		}
-		iPos = pnanovdb_coord_to_vec3(HitResults.ijk_hit); // index/vdb space hit position
-	}
-	else
-#endif
-	{
-		Transmittance = GetTransmittance(
-			Ray.Origin, Ray.Direction,
-			DensitySampler,
-			2.0 * SHADOW_STEP_SIZE_MULT,
-			LocalToWorld, SHADOW_THRESHOLD, RandSequence, MinDistLocal, MaterialParameters);
-		Transmittance = Average(Transmittance);
-		iPos = pnanovdb_hdda_ray_start(Ray.Origin, MinDistLocal, Ray.Direction);
-	}
-
-	float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
-	FirstIntersection = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
-
-	return all(Transmittance < SHADOW_THRESHOLD);
-}
-
-
-bool GetFurthestVdbValue(
-	FShadowDepthVSToPS Inputs, 
-	float4 SvPosition, 
-#if ONEPASS_POINTLIGHT_SHADOW
-	uint LayerIndex,
-#endif
-	out float3 LastIntersection)
-{
-	VdbSampler DensitySampler = InitVdbSampler(DensityVdbBuffer);
-
-	FMaterialPixelParameters MaterialParameters = GetMaterialPixelParameters(Inputs.FactoryInterpolants, SvPosition);
-
-	uint PrimId = VertexFactoryGetPrimitiveId(Inputs.FactoryInterpolants);
-	float4x4 WorldToLocal = LWCHackToFloat(GetPrimitiveData(PrimId).WorldToLocal);
-	float4x4 LocalToWorld = LWCHackToFloat(GetPrimitiveData(PrimId).LocalToWorld);
-
-	float DeviceZ = FarDepthValue; // let depth write test do its job
-#if HAS_INVERTED_Z_BUFFER
-	DeviceZ = max(DeviceZ, 0.000000000001); // either no Z value, or too far to even consider
-#endif
-	LastIntersection = 0.0; // Translated world space
-
-	RandomSequence RandSequence;
-	RandomSequence_Initialize(RandSequence, SvPosition.xy, 0, ResolvedView.StateFrameIndex + ResolvedView.Random, 1);
-	
-	VdbRay Ray = PrepareShadowRayFromPixel(
-		DensitySampler.GridBuffer, 
-		DensitySampler.Grid, 
-		SvPosition,
-#if ONEPASS_POINTLIGHT_SHADOW
-		LayerIndex,
-#endif
-		WorldToLocal, 
-		DeviceZ, 
-		false);
-
-	return RaymarchFogVolume(	DensitySampler,
-								Ray,
-								MaterialParameters, RandSequence,
-								LocalToWorld, WorldToLocal, SvPosition, LastIntersection);
-}
-
-
 void MainPS(
 	FShadowDepthVSToPS Inputs,
 #if VIRTUAL_SM_ENABLED
@@ -460,18 +323,19 @@ void MainPS(
 #if INTERPOLATE_VF_ATTRIBUTES
 	
 	float3 LastIntersection = 0.0;
-	bool Valid = GetFurthestVdbValue(
-		Inputs, 
+	float3 Transmittance = GetVdbTransmittance(
+		Inputs.FactoryInterpolants, 
 		SvPosition, 
 #if ONEPASS_POINTLIGHT_SHADOW
 		LayerIndex,
 #endif
 		LastIntersection);
+	bool Valid = all(Transmittance < GetMaterialOpacityMaskClipValue());
 	
 	if (!Valid) discard;
 	
 	float4 WorldPos = float4(LastIntersection.xyz, 1.0);
-	#if ONEPASS_POINTLIGHT_SHADOW
+#if ONEPASS_POINTLIGHT_SHADOW
 		float4 ClipPos = mul(WorldPos, PassStruct.ShadowViewProjectionMatrices[LayerIndex]);
 		OutDepth = ClipPos.z / ClipPos.w;
 	#else

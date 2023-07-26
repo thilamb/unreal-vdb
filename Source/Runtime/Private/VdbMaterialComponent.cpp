@@ -55,8 +55,15 @@ void UVdbMaterialComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMat
 FPrimitiveSceneProxy* UVdbMaterialComponent::CreateSceneProxy()
 {
 	const UVdbVolumeBase* MainVolume = VdbAssets->GetMainVolume();
-	if (!MainVolume || !MainVolume->IsValid() || MainVolume->IsVectorGrid() || !GetMaterial(0))
+	if (!MainVolume || !MainVolume->IsValid() || MainVolume->IsVectorGrid() )
 		return nullptr;
+
+	UMaterialInterface* VdbMaterial = GetMaterial(0);
+	if (!VdbMaterial || VdbMaterial->GetMaterial()->MaterialDomain != MD_Volume)
+	{
+		UE_LOG(LogSparseVolumetrics, Warning, TEXT("VDB %s needs a Volumetric Material."), *GetName());
+		return nullptr;
+	}
 
 	return new FVdbVolumeSceneProxy(VdbAssets, this);
 }

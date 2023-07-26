@@ -33,9 +33,10 @@ DECLARE_STATS_GROUP(TEXT("VolumetricVdb"), STATGROUP_Vdb, STATCAT_Advanced);
 DECLARE_MEMORY_STAT(TEXT("Vdb GPU data interface memory"), STAT_VdbGPUDataInterfaceMemory, STATGROUP_Vdb);
 
 DECLARE_CYCLE_STAT(TEXT("RT Total"), STAT_VdbRendering_RT, STATGROUP_Vdb);
+DECLARE_CYCLE_STAT(TEXT("RT Shadow Depth"), STAT_VdbShadowDepth_RT, STATGROUP_Vdb);
+DECLARE_CYCLE_STAT(TEXT("RT Translucent Shadow Depth"), STAT_VdbTranslucentShadowDepth_RT, STATGROUP_Vdb);
 DECLARE_CYCLE_STAT(TEXT("RT Opaque"), STAT_VdbOpaque_RT, STATGROUP_Vdb);
 DECLARE_CYCLE_STAT(TEXT("RT Translucent"), STAT_VdbTranslucent_RT, STATGROUP_Vdb);
-DECLARE_CYCLE_STAT(TEXT("RT Principled"), STAT_VdbPrincipled_RT, STATGROUP_Vdb);
 DECLARE_CYCLE_STAT(TEXT("RT GetDynMeshElements"), STAT_VdbSceneProxy_GetDynamicMeshElements, STATGROUP_Vdb);
 
 struct FVdbCVars

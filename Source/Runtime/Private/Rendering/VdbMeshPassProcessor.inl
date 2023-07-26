@@ -14,16 +14,38 @@
 
 #pragma once
 
-
 #include "VdbShaders.h"
 #include "MeshPassProcessor.h"
 #include "MeshPassProcessor.inl"
 #include "ScenePrivate.h"
 
+template<typename VertexShaderType, typename PixelShaderType>
+bool GetPassShaders(
+	const FMaterial& Material,
+	FVertexFactoryType* VertexFactoryType,
+	TShaderRef<VertexShaderType>& VertexShader,
+	TShaderRef<PixelShaderType>& PixelShader
+)
+{
+	FMaterialShaderTypes ShaderTypes;
+	ShaderTypes.AddShaderType<VertexShaderType>();
+	ShaderTypes.AddShaderType<PixelShaderType>();
+
+	FMaterialShaders Shaders;
+	if (!Material.TryGetShaders(ShaderTypes, VertexFactoryType, Shaders))
+	{
+		return false;
+	}
+
+	Shaders.TryGetVertexShader(VertexShader);
+	Shaders.TryGetPixelShader(PixelShader);
+
+	return VertexShader.IsValid() && PixelShader.IsValid();
+}
+
 //-----------------------------------------------------------------------------
 //--- FVdbDepthMeshProcessor
 //-----------------------------------------------------------------------------
-
 
 class FVdbDepthMeshProcessor : public FMeshPassProcessor
 {
@@ -234,6 +256,114 @@ private:
 };
 
 //-----------------------------------------------------------------------------
+//--- FVdbTrasnlucentDepthMeshProcessor
+//-----------------------------------------------------------------------------
+
+class FVdbTranslucentDepthMeshProcessor : public FMeshPassProcessor
+{
+public:
+	FVdbTranslucentDepthMeshProcessor(
+		const FScene* Scene,
+		const FSceneView* InView,
+		FMeshPassDrawListContext* InDrawListContext,
+		const FProjectedShadowInfo* InShadowInfo,
+		FVdbShadowDepthShaderElementData&& ShaderElementData)
+		: FMeshPassProcessor(Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
+		, VdbShaderElementData(ShaderElementData)
+		, FeatureLevel(Scene->GetFeatureLevel())
+		, ShadowInfo(InShadowInfo)
+		, ShadowDepthType(InShadowInfo->GetShadowDepthType())
+		, bDirectionalLight(InShadowInfo->bDirectionalLight)
+	{
+		PassDrawRenderState.SetDepthStencilState(TStaticDepthStencilState<false, CF_Always>::GetRHI());
+		PassDrawRenderState.SetBlendState(TStaticBlendState<
+			CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_One, BF_One,
+			CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_One, BF_One>::GetRHI());
+	}
+
+	virtual void AddMeshBatch(const FMeshBatch& RESTRICT MeshBatch, uint64 BatchElementMask, const FPrimitiveSceneProxy* RESTRICT PrimitiveSceneProxy, int32 StaticMeshId = -1) override final
+	{
+		const FMaterialRenderProxy* MaterialRenderProxy = MeshBatch.MaterialRenderProxy;
+		const FMaterial* Material = MaterialRenderProxy->GetMaterialNoFallback(FeatureLevel);
+
+		if (Material && Material->GetMaterialDomain() == MD_Volume && Material->GetRenderingThreadShaderMap())
+		{
+			const float MaterialTranslucentShadowStartOffset = Material->GetTranslucentShadowStartOffset();
+			const bool MaterialCastDynamicShadowAsMasked = Material->GetCastDynamicShadowAsMasked();
+			const FMeshDrawingPolicyOverrideSettings OverrideSettings = ComputeMeshOverrideSettings(MeshBatch);
+			const ERasterizerFillMode MeshFillMode = ComputeMeshFillMode(*Material, OverrideSettings);
+			const ERasterizerCullMode MeshCullMode = MeshBatch.ReverseCulling ? CM_CW : CM_CCW; // ComputeMeshCullMode(*Material, OverrideSettings);
+			const bool bIsTranslucent = IsTranslucentBlendMode(*Material);
+
+			// Only render translucent meshes into the Fourier opacity maps
+			if (bIsTranslucent && !MaterialCastDynamicShadowAsMasked)
+			{
+				if (bDirectionalLight)
+				{
+					return Process<FVdbTranslucentShadowDepthVS_Standard, FVdbTranslucentShadowDepthPS_Standard>(
+						MeshBatch, BatchElementMask, PrimitiveSceneProxy, *MaterialRenderProxy, *Material, StaticMeshId, MeshFillMode, MeshCullMode);
+				}
+				else
+				{
+					return Process<FVdbTranslucentShadowDepthVS_PerspectiveCorrect, FVdbTranslucentShadowDepthPS_PerspectiveCorrect>(
+						MeshBatch, BatchElementMask, PrimitiveSceneProxy, *MaterialRenderProxy, *Material, StaticMeshId, MeshFillMode, MeshCullMode);
+				}
+			}
+		}
+	}
+
+private:
+
+	template<typename VertexShaderType, typename PixelShaderType>
+	void Process(
+		const FMeshBatch& MeshBatch,
+		uint64 BatchElementMask,
+		const FPrimitiveSceneProxy* RESTRICT PrimitiveSceneProxy,
+		const FMaterialRenderProxy& RESTRICT MaterialRenderProxy,
+		const FMaterial& RESTRICT MaterialResource,
+		int32 StaticMeshId,
+		ERasterizerFillMode MeshFillMode,
+		ERasterizerCullMode MeshCullMode)
+	{
+		VdbShaderElementData.InitializeMeshMaterialData(ViewIfDynamicMeshCommand, PrimitiveSceneProxy, MeshBatch, StaticMeshId, false);
+
+		const FVertexFactory* VertexFactory = MeshBatch.VertexFactory;
+
+		TMeshProcessorShaders<VertexShaderType, PixelShaderType> PassShaders;
+		if (!GetPassShaders(
+			MaterialResource,
+			VertexFactory->GetType(),
+			PassShaders.VertexShader,
+			PassShaders.PixelShader))
+		{
+			return;
+		}
+
+		const FMeshDrawCommandSortKey SortKey = CalculateMeshStaticSortKey(PassShaders.VertexShader, PassShaders.PixelShader);
+		BuildMeshDrawCommands(
+			MeshBatch,
+			BatchElementMask,
+			PrimitiveSceneProxy,
+			MaterialRenderProxy,
+			MaterialResource,
+			PassDrawRenderState,
+			PassShaders,
+			MeshFillMode,
+			MeshCullMode,
+			SortKey,
+			EMeshPassFeatures::Default,
+			VdbShaderElementData);
+	}
+
+	FMeshPassProcessorRenderState PassDrawRenderState;
+	FVdbShadowDepthShaderElementData VdbShaderElementData;
+	ERHIFeatureLevel::Type FeatureLevel;
+	const FProjectedShadowInfo* ShadowInfo;
+	FShadowDepthType ShadowDepthType;
+	const bool bDirectionalLight;
+};
+
+//-----------------------------------------------------------------------------
 //--- FVdbMeshProcessor
 //-----------------------------------------------------------------------------
 
@@ -369,30 +499,6 @@ public:
 	}
 
 private:
-
-	template<typename VertexShaderType, typename PixelShaderType>
-	bool GetPassShaders(
-		const FMaterial& Material,
-		FVertexFactoryType* VertexFactoryType,
-		TShaderRef<VertexShaderType>& VertexShader,
-		TShaderRef<PixelShaderType>& PixelShader
-	)
-	{
-		FMaterialShaderTypes ShaderTypes;
-		ShaderTypes.AddShaderType<VertexShaderType>();
-		ShaderTypes.AddShaderType<PixelShaderType>();
-
-		FMaterialShaders Shaders;
-		if (!Material.TryGetShaders(ShaderTypes, VertexFactoryType, Shaders))
-		{
-			return false;
-		}
-
-		Shaders.TryGetVertexShader(VertexShader);
-		Shaders.TryGetPixelShader(PixelShader);
-
-		return VertexShader.IsValid() && PixelShader.IsValid();
-	}
 
 	template<typename VertexShaderType, typename PixelShaderType>
 	void Process(

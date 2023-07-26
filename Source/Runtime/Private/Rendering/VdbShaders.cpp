@@ -53,3 +53,9 @@ IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbShadowDepthPS_NonPerspectiveCorre
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbShadowDepthPS_PerspectiveCorrect_FogVolume, TEXT("/Plugin/VdbVolume/Private/VdbShadowDepth.usf"), TEXT("MainPS"), SF_Pixel);
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbShadowDepthPS_OnePassPointLight_FogVolume, TEXT("/Plugin/VdbVolume/Private/VdbShadowDepth.usf"), TEXT("MainPS"), SF_Pixel);
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbShadowDepthPS_VirtualShadowMap_FogVolume, TEXT("/Plugin/VdbVolume/Private/VdbShadowDepth.usf"), TEXT("MainPS"), SF_Pixel);
+
+// Translucent Shadow Depth
+IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbTranslucentShadowDepthVS_PerspectiveCorrect, TEXT("/Plugin/VdbVolume/Private/VdbTranslucentShadowDepth.usf"), TEXT("MainVS"), SF_Vertex);
+IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbTranslucentShadowDepthVS_Standard, TEXT("/Plugin/VdbVolume/Private/VdbTranslucentShadowDepth.usf"), TEXT("MainVS"), SF_Vertex);
+IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbTranslucentShadowDepthPS_PerspectiveCorrect, TEXT("/Plugin/VdbVolume/Private/VdbTranslucentShadowDepth.usf"), TEXT("MainPS"), SF_Pixel);
+IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbTranslucentShadowDepthPS_Standard, TEXT("/Plugin/VdbVolume/Private/VdbTranslucentShadowDepth.usf"), TEXT("MainPS"), SF_Pixel);

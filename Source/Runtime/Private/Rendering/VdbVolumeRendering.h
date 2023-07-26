@@ -73,6 +73,7 @@ private:
 
 #if VDB_CAST_SHADOWS
 	void ShadowDepth_RenderThread(FShadowDepthRenderParameters& Parameters);
+	void TranslucentShadowDepth_RenderThread(FTranslucentShadowDepthRenderParameters& Parameters);
 #endif
 	void Render_RenderThread(FPostOpaqueRenderParameters& Parameters, bool PostOpaque);
 	void RenderPostOpaque_RenderThread(FPostOpaqueRenderParameters& Parameters);
@@ -114,8 +115,10 @@ private:
 	FDelegateHandle RenderOverlayDelegateHandle;
 #if VDB_CAST_SHADOWS
 	FShadowDepthRenderDelegate ShadowDepthDelegate;
+	FTranslucentShadowDepthRenderDelegate TranslucentShadowDepthDelegate;
 #endif
 	FDelegateHandle ShadowDepthDelegateHandle;
+	FDelegateHandle TranslucentShadowDepthDelegateHandle;
 
 	UTextureRenderTarget2D* DefaultVdbRenderTarget = nullptr;
 	FTexture* DefaultVdbRenderTargetTex = nullptr;

@@ -40,14 +40,17 @@ struct FVdbElementData : public FMeshMaterialShaderElementData
 {
 	FIntVector4 CustomIntData0; // x: MaxRayDepth, y: SamplesPerPixel, z: colored transmittance, w: temporal noise
 	FIntVector4 CustomIntData1; // x: BlackbodyCurveIndex, y: CurveAtlaHeight, z: TranslucentLevelSet, w: TemperatureOnly
-	FVector4f CustomFloatData0; // x: Local step size, y: Shadow step size mutliplier, z: voxel size, w: jittering
+	FVector4f CustomFloatData0; // x: Local step size, y: Shadow step size multiplier, z: voxel size, w: jittering
 	FVector4f CustomFloatData1; // x: anisotropy, y: albedo, z: blackbody intensity, w: blackbody temperature
-	FVector4f CustomFloatData2; // x: density mul, y: padding, z: ambient, w: shadow threshold
+	FVector4f CustomFloatData2; // x: density mul, y: padding, z: ambient, w: unused
 	FShaderResourceViewRHIRef DensityBufferSRV;
 	FShaderResourceViewRHIRef TemperatureBufferSRV;
 	FShaderResourceViewRHIRef ColorBufferSRV;
 	FShaderResourceViewRHIRef BlackbodyColorSRV;
 };
+
+//-----------------------------------------------------------------------------
+//					--- Main pass rendering ---
 
 class FVdbShaderVS : public FMeshMaterialShader
 {
@@ -259,6 +262,7 @@ typedef TVdbShaderPS<false, true, true, true, false>  FVdbShaderPS_FogVolume_Bla
 typedef TVdbShaderPS<false, true, true, true, true>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear;
 
 //-----------------------------------------------------------------------------
+//					--- Shadow Depth rendering ---
 
 BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbDepthShaderParams, )
 	SHADER_PARAMETER(FMatrix44f, ShadowClipToTranslatedWorld)
@@ -271,7 +275,6 @@ BEGIN_SHADER_PARAMETER_STRUCT(FVdbShadowDepthPassParameters, )
 	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FShadowDepthPassUniformParameters, DeferredPassUniformBuffer)
 	SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
 	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FVdbDepthShaderParams, VdbUniformBuffer)
-
 	RENDER_TARGET_BINDING_SLOTS()
 END_SHADER_PARAMETER_STRUCT()
 
@@ -292,7 +295,10 @@ public:
 
 	static bool ShouldCompilePermutation(const FMeshMaterialShaderPermutationParameters& Parameters)
 	{
-		return false;
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5) &&
+			Parameters.MaterialParameters.MaterialDomain == MD_Volume &&
+			FMeshMaterialShader::ShouldCompilePermutation(Parameters) &&
+			VdbShaders::IsSupportedVertexFactoryType(Parameters.VertexFactoryType);
 	}
 
 	void GetShaderBindings(
@@ -354,11 +360,7 @@ public:
 
 	static bool ShouldCompilePermutation(const FMeshMaterialShaderPermutationParameters& Parameters)
 	{
-		// TODO: check and add info from TShadowDepthVS::ShouldCompilePermutation
-		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5) &&
-			Parameters.MaterialParameters.MaterialDomain == MD_Volume &&
-			FMeshMaterialShader::ShouldCompilePermutation(Parameters) &&
-			VdbShaders::IsSupportedVertexFactoryType(Parameters.VertexFactoryType);
+		return FVdbShadowDepthVS::ShouldCompilePermutation(Parameters);
 	}
 
 	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
@@ -473,7 +475,6 @@ public:
 
 	static bool ShouldCompilePermutation(const FMeshMaterialShaderPermutationParameters& Parameters)
 	{
-		// TODO: check and add relevant things from TShadowDepthPS::ShouldCompilePermutation
 		return FVdbShadowDepthPS::ShouldCompilePermutation(Parameters);
 	}
 
@@ -503,3 +504,91 @@ typedef TVdbShadowDepthPS<PixelShadowDepth_NonPerspectiveCorrect, false> FVdbSha
 typedef TVdbShadowDepthPS<PixelShadowDepth_PerspectiveCorrect, false> FVdbShadowDepthPS_PerspectiveCorrect_FogVolume;
 typedef TVdbShadowDepthPS<PixelShadowDepth_OnePassPointLight, false> FVdbShadowDepthPS_OnePassPointLight_FogVolume;
 typedef TVdbShadowDepthPS<PixelShadowDepth_VirtualShadowMap, false> FVdbShadowDepthPS_VirtualShadowMap_FogVolume;
+
+
+//-----------------------------------------------------------------------------
+//				--- Translucent Shadow Depth rendering ---
+
+BEGIN_SHADER_PARAMETER_STRUCT(FVdbTrasnlucentShadowDepthPassParameters, )
+	SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FTranslucencyDepthPassUniformParameters, PassUniformBuffer)
+	//SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
+	SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FVdbDepthShaderParams, VdbUniformBuffer)
+	RENDER_TARGET_BINDING_SLOTS()
+END_SHADER_PARAMETER_STRUCT()
+
+/**
+* Vertex shader used to render shadow maps for translucency.
+*/
+
+enum ETranslucencyShadowDepthShaderMode
+{
+	TranslucencyShadowDepth_PerspectiveCorrect,
+	TranslucencyShadowDepth_Standard,
+};
+
+template <ETranslucencyShadowDepthShaderMode ShaderMode>
+class TVdbTranslucencyShadowDepthVS : public FVdbShadowDepthVS
+{
+	DECLARE_SHADER_TYPE(TVdbTranslucencyShadowDepthVS, MeshMaterial);
+
+	TVdbTranslucencyShadowDepthVS() = default;
+	TVdbTranslucencyShadowDepthVS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FVdbShadowDepthVS(Initializer)
+	{}
+
+public:
+
+	static bool ShouldCompilePermutation(const FMeshMaterialShaderPermutationParameters& Parameters)
+	{
+		return AllowTranslucencyPerObjectShadows(Parameters.Platform) && IsTranslucentBlendMode(Parameters.MaterialParameters) &&
+			FVdbShadowDepthVS::ShouldCompilePermutation(Parameters);
+	}
+
+	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FVdbShadowDepthVS::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+
+		OutEnvironment.SetDefine(TEXT("PERSPECTIVE_CORRECT_DEPTH"), (uint32)(ShaderMode == TranslucencyShadowDepth_PerspectiveCorrect ? 1 : 0));
+		OutEnvironment.SetDefine(TEXT("TRANSLUCENT_SHADOWS"), 1);
+	}
+};
+typedef TVdbTranslucencyShadowDepthVS<TranslucencyShadowDepth_PerspectiveCorrect> FVdbTranslucentShadowDepthVS_PerspectiveCorrect;
+typedef TVdbTranslucencyShadowDepthVS<TranslucencyShadowDepth_Standard> FVdbTranslucentShadowDepthVS_Standard;
+
+/**
+ * Pixel shader used for accumulating translucency layer densities
+ */
+template <ETranslucencyShadowDepthShaderMode ShaderMode>
+class TVdbTranslucencyShadowDepthPS : public FVdbShadowDepthPS
+{
+public:
+	DECLARE_SHADER_TYPE(TVdbTranslucencyShadowDepthPS, MeshMaterial);
+
+	static bool ShouldCompilePermutation(const FMeshMaterialShaderPermutationParameters& Parameters)
+	{
+		return AllowTranslucencyPerObjectShadows(Parameters.Platform) && IsTranslucentBlendMode(Parameters.MaterialParameters) &&
+			FVdbShadowDepthVS::ShouldCompilePermutation(Parameters);
+	}
+
+	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FVdbShadowDepthPS::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("PERSPECTIVE_CORRECT_DEPTH"), (uint32)(ShaderMode == TranslucencyShadowDepth_PerspectiveCorrect ? 1 : 0));
+		OutEnvironment.SetDefine(TEXT("STRATA_INLINE_SHADING"), 1);
+		OutEnvironment.SetDefine(TEXT("TRANSLUCENT_SHADOWS"), 1);
+	}
+
+	TVdbTranslucencyShadowDepthPS() = default;
+	TVdbTranslucencyShadowDepthPS(const ShaderMetaType::CompiledShaderInitializerType& Initializer) :
+		FVdbShadowDepthPS(Initializer)
+	{
+	}
+
+
+private:
+	// We actually DO NOT want to support self translucency, we are doing a state of the art shading in main pass
+	//LAYOUT_FIELD(FShaderParameter, TranslucentShadowStartOffset);
+};
+typedef TVdbTranslucencyShadowDepthPS<TranslucencyShadowDepth_PerspectiveCorrect> FVdbTranslucentShadowDepthPS_PerspectiveCorrect;
+typedef TVdbTranslucencyShadowDepthPS<TranslucencyShadowDepth_Standard> FVdbTranslucentShadowDepthPS_Standard;

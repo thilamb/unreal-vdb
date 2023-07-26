@@ -47,12 +47,12 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 
 	// Raymarching step distance, in local space. The smaller the more accurate, but also the more expensive. Only use small values 
 	// to capture small missing features. It is recommended to keep this multiplier as high as possible for better performance.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (UIMin = "0.001", ClampMin = "0.001"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (UIMin = "0.001", ClampMin = "0.0001"))
 	float LocalStepSize = 4.f;
 
 	// Shadow raymarching step distance multiplier. It represents a multiple of LocalStepSize.
 	// It is recommended to keep this multiplier as high as possible for better performance.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (UIMin = "1.0", ClampMin = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (UIMin = "1.0", ClampMin = "0.0001"))
 	float ShadowStepSizeMultiplier = 5.f;
 
 	// Amount of jittering / randomness during raymarching steps. Between 0 and 1.
@@ -94,10 +94,6 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 	// Ambient contribution to be added to light scattering, usually needed to cheaply boost volume radiance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (UIMin = "0.0"))
 	float Ambient = 0.0;
-
-	// We only support opaque shadows, choose after which threshold Volume is considered opaque
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1.0"))
-	float ShadowThreshold = 0.7;
 
 	// Backward or forward scattering direction (aka directional bias).
 	// The default value of zero gives isotropic scattering so that light is scattered evenly in all directions. 
