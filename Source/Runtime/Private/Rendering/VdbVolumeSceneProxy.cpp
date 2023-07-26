@@ -35,7 +35,7 @@ FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetCompon
 {
 	LevelSet = AssetComponent->GetVdbClass() == EVdbClass::SignedDistance;
 	TranslucentLevelSet = LevelSet && InComponent->TranslucentLevelSet;
-	ImprovedSkylight = InComponent->ImprovedSkylight;
+	ImprovedEnvLight = InComponent->ImprovedEnvLight;
 	TrilinearSampling = InComponent->TrilinearSampling;
 	CastShadows = InComponent->CastShadow;
 	RenderAfterTransparents = InComponent->RenderAfterTransparents;

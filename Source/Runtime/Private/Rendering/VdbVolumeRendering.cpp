@@ -847,7 +847,7 @@ void FVdbVolumeRendering::RenderLight(
 						&InView,
 						DynamicMeshPassContext,
 						Proxy->IsLevelSet(), Proxy->IsTranslucentLevelSet(),
-						Proxy->UseImprovedSkylight(),
+						Proxy->UseImprovedEnvLight(),
 						Proxy->UseTrilinearSampling() || FVdbCVars::CVarVolumetricVdbTrilinear.GetValueOnRenderThread(),
 						bWriteDepth, FirstLight,
 						ShaderElementData.TemperatureBufferSRV != nullptr,

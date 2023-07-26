@@ -48,7 +48,7 @@ public:
 	bool IsTranslucent() const { return !LevelSet || TranslucentLevelSet; }
 	bool IsIndexToLocalDeterminantNegative() const { return IndexToLocalDeterminantNegative; }
 	bool IsTemperatureOnly() const { return TemperatureOnly; }
-	bool UseImprovedSkylight() const { return ImprovedSkylight; }
+	bool UseImprovedEnvLight() const { return ImprovedEnvLight; }
 	bool UseTrilinearSampling() const { return TrilinearSampling; }
 	bool RendersAfterTransparents() const { return RenderAfterTransparents; }
 	void ResetVisibility() { VisibleViews.Empty(4); }
@@ -79,7 +79,7 @@ private:
 	FMaterialRelevance MaterialRelevance;
 	bool LevelSet;
 	bool TranslucentLevelSet;
-	bool ImprovedSkylight;
+	bool ImprovedEnvLight;
 	bool TrilinearSampling;
 	bool IndexToLocalDeterminantNegative;
 	bool CastShadows;

@@ -76,8 +76,8 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 	bool TemporalNoise = true;
 
 	// Enable better quality environment sampling (SkyLight) BUT with much slower performances. Recommended for offline rendering (MRQ)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (DisplayName="Improved Skylight sampling (SLOW)"))
-	bool ImprovedSkylight = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (DisplayName="Improved environment sampling (SLOW)"))
+	bool ImprovedEnvLight = true;
 
 	// VDBs are rendered after opaques and before transparent by default. Check this option to render them after transparent objects.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
