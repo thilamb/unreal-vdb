@@ -1,0 +1,159 @@
+// Copyright Thibault Lambert
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http ://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef D_VDB_SHADOW_DEPTH_COMMON
+#define D_VDB_SHADOW_DEPTH_COMMON
+
+#include "/Engine/Private/ShadowDepthCommon.ush"
+
+VdbRay PrepareShadowRayFromPixel(
+	pnanovdb_buf_t grid_buf,
+	pnanovdb_grid_handle_t grid,
+	float4 SvPosition,
+#if ONEPASS_POINTLIGHT_SHADOW
+	uint LayerIndex,
+#endif
+	float4x4 WorldToLocal,
+	float DeviceZ,
+	bool Forward)
+{
+	float4 ClipPosition = SvPositionToScreenPosition(SvPosition) / SvPosition.w; // NDC to Clip
+
+	// Light space
+#if ONEPASS_POINTLIGHT_SHADOW
+	float4 Near = mul(float4(ClipPosition.xy, NearDepthValue, 1.0), VdbDepthParams.CubeShadowClipToTranslatedWorld[LayerIndex]);
+	float4 Far = mul(float4(ClipPosition.xy, DeviceZ, 1.0), VdbDepthParams.CubeShadowClipToTranslatedWorld[LayerIndex]);
+#else
+	float4 Near = mul(float4(ClipPosition.xy, NearDepthValue, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld);
+	float4 Far = mul(float4(ClipPosition.xy, DeviceZ, 1.0), VdbDepthParams.ShadowClipToTranslatedWorld);
+#endif
+
+	float3 Start = Near.xyz / Near.w;
+	Start -= LWCHackToFloat(VdbDepthParams.ShadowPreViewTranslation);
+	float3 Stop = Far.xyz / Far.w;
+	Stop -= LWCHackToFloat(VdbDepthParams.ShadowPreViewTranslation);
+
+	// Index space
+	float3 Origin = WorldToIndexPosition(Start, WorldToLocal, grid_buf, grid);
+	float3 End = WorldToIndexPosition(Stop, WorldToLocal, grid_buf, grid);
+
+	float Dist = length(End - Origin);
+
+	VdbRay Ray;
+	if (Forward)
+	{
+		Ray.Origin = Origin;
+		Ray.Direction = (End - Origin) / Dist;
+	}
+	else
+	{
+		Ray.Origin = End;
+		Ray.Direction = (Origin - End) / Dist;
+	}
+	Ray.TMin = 0.0001f;
+	Ray.TMax = POSITIVE_INFINITY;
+
+	return Ray;
+}
+
+float3 RaymarchFogVolume(
+	VdbSampler DensitySampler,
+	VdbRay Ray,
+	FMaterialPixelParameters MaterialParameters,
+	RandomSequence RandSequence,
+	float4x4 LocalToWorld,
+	float4x4 WorldToLocal,
+	float4 SvPosition,
+	out float3 FirstIntersection)
+{
+	float MinDistLocal = 0.0;
+	float3 Transmittance = 0.0;
+	pnanovdb_vec3_t iPos = 0.0;
+
+#if LEVEL_SET
+	if (!TRANSLUCENT_LEVEL_SET)
+	{
+		ZeroCrossingHit HitResults;
+		if (!GetNextIntersection(DensitySampler, Ray, HitResults))
+		{
+			Transmittance = 1.0;
+		}
+		iPos = pnanovdb_coord_to_vec3(HitResults.ijk_hit); // index/vdb space hit position
+	}
+	else
+#endif
+	{
+#if MATERIALBLENDING_TRANSLUCENT | MATERIALBLENDING_ADDITIVE
+		float ShadowThreshold = 1.0f / 255.0f;
+#elif MATERIALBLENDING_MASKED
+		float ShadowThreshold = 1.0 - GetMaterialOpacityMaskClipValue();
+#endif
+
+		Transmittance = GetTransmittance(
+			Ray.Origin, Ray.Direction,
+			DensitySampler,
+			2.0 * SHADOW_STEP_SIZE_MULT,
+			LocalToWorld, ShadowThreshold, RandSequence, MinDistLocal, MaterialParameters);
+		iPos = pnanovdb_hdda_ray_start(Ray.Origin, MinDistLocal, Ray.Direction);
+	}
+
+	float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
+	FirstIntersection = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
+
+	return Transmittance;
+}
+
+float3 GetVdbTransmittance(
+	FVertexFactoryInterpolantsVSToPS Interpolants,
+	float4 SvPosition,
+#if ONEPASS_POINTLIGHT_SHADOW
+	uint LayerIndex,
+#endif
+	out float3 LastIntersection)
+{
+	VdbSampler DensitySampler = InitVdbSampler(DensityVdbBuffer);
+
+	FMaterialPixelParameters MaterialParameters = GetMaterialPixelParameters(Interpolants, SvPosition);
+
+	uint PrimId = VertexFactoryGetPrimitiveId(Interpolants);
+	float4x4 WorldToLocal = LWCHackToFloat(GetPrimitiveData(PrimId).WorldToLocal);
+	float4x4 LocalToWorld = LWCHackToFloat(GetPrimitiveData(PrimId).LocalToWorld);
+
+	float DeviceZ = FarDepthValue; // let depth write test do its job
+#if HAS_INVERTED_Z_BUFFER
+	DeviceZ = max(DeviceZ, 0.000000000001); // either no Z value, or too far to even consider
+#endif
+	LastIntersection = 0.0; // Translated world space
+
+	RandomSequence RandSequence;
+	RandomSequence_Initialize(RandSequence, SvPosition.xy, 0, ResolvedView.StateFrameIndex + ResolvedView.Random, 1);
+
+	VdbRay Ray = PrepareShadowRayFromPixel(
+		DensitySampler.GridBuffer,
+		DensitySampler.Grid,
+		SvPosition,
+#if ONEPASS_POINTLIGHT_SHADOW
+		LayerIndex,
+#endif
+		WorldToLocal,
+		DeviceZ,
+		false);
+
+	return RaymarchFogVolume(DensitySampler,
+		Ray,
+		MaterialParameters, RandSequence,
+		LocalToWorld, WorldToLocal, SvPosition, LastIntersection);
+}
+
+#endif // D_VDB_SHADOW_DEPTH_COMMON
