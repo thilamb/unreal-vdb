@@ -18,13 +18,23 @@
 half3 SampleDisplacement(in FPixelMaterialInputs PixelMaterialInputs)
 {
 	// w value is not set. don't try to use it
+#if STRATA_ENABLED
+	FStrataBSDF BSDF = PixelMaterialInputs.FrontMaterial.InlinedBSDF;
+	half3 Displacement = VOLUMETRICFOGCLOUD_EXTINCTION(BSDF).r;
+#else
 	half3 Displacement = GetMaterialSubsurfaceDataRaw(PixelMaterialInputs).xyz;
+#endif
 	return Displacement;
 }
 
 half3 SampleEmissive(in FPixelMaterialInputs PixelMaterialInputs)
 {
+#if STRATA_ENABLED
+	FStrataBSDF BSDF = PixelMaterialInputs.FrontMaterial.InlinedBSDF;
+	half3 EmissiveColor = BSDF_GETEMISSIVE(BSDF);
+#else
 	half3 EmissiveColor = GetMaterialEmissiveRaw(PixelMaterialInputs);
+#endif
 	return clamp(EmissiveColor, 0.0f, 65000.0f);
 }
 
@@ -32,8 +42,13 @@ half3 SampleEmissive(in FPixelMaterialInputs PixelMaterialInputs)
 half3 SampleScattering(in FPixelMaterialInputs PixelMaterialInputs)
 {
 	half3 Scattering = 1.0;
-#if !MATERIAL_SHADINGMODEL_UNLIT
-	Scattering = GetMaterialBaseColorRaw(PixelMaterialInputs).rgb;
+#if STRATA_ENABLED
+	FStrataBSDF BSDF = PixelMaterialInputs.FrontMaterial.InlinedBSDF;
+	Scattering = VOLUMETRICFOGCLOUD_ALBEDO(BSDF);
+#else
+	#if !MATERIAL_SHADINGMODEL_UNLIT
+		Scattering = GetMaterialBaseColorRaw(PixelMaterialInputs).rgb;
+	#endif
 #endif
 	return Scattering;
 }
@@ -54,7 +69,12 @@ float2 UnpackTwoNormalizedFloat(float PackedFloat)
 // Custom density modifications to the VdbDensity volume
 float2 SampleDensityModifications(in FPixelMaterialInputs PixelMaterialInputs)
 {
+#if STRATA_ENABLED
+	FStrataBSDF BSDF = PixelMaterialInputs.FrontMaterial.InlinedBSDF;
+	float AO = VOLUMETRICFOGCLOUD_AO(BSDF);
+#else
 	float AO = GetMaterialAmbientOcclusionRaw(PixelMaterialInputs);
+#endif
 	return UnpackTwoNormalizedFloat(AO);
 }
 
