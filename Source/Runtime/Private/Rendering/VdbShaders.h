@@ -90,6 +90,7 @@ BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbShaderParams, )
 	SHADER_PARAMETER(int, bApplyDirectLighting)
 	SHADER_PARAMETER(int, bApplyShadowTransmittance)
 	SHADER_PARAMETER(int, LightType)
+#if VDB_ENGINE_MODIFICATIONS
 	SHADER_PARAMETER_STRUCT(FDeferredLightUniformStruct, DeferredLight)
 	// Shadow data
 	SHADER_PARAMETER_STRUCT(FForwardLightData, ForwardLightData)
@@ -97,11 +98,11 @@ BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbShaderParams, )
 	SHADER_PARAMETER(int32, VirtualShadowMapId)
 	// Indirect Lighting
 	SHADER_PARAMETER_STRUCT(FLumenTranslucencyLightingParameters, LumenGIVolumeStruct)
+#endif
 	// Path-tracing
 	SHADER_PARAMETER(uint32, NumAccumulations)
 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, PrevAccumTex)
 END_GLOBAL_SHADER_PARAMETER_STRUCT()
-
 
 class FVdbShaderPS : public FMeshMaterialShader
 {
@@ -124,8 +125,10 @@ class FVdbShaderPS : public FMeshMaterialShader
 		// Most Uniform buffers have a non-uniform buffer form, usually just a struct that can be included/nested in a sub-uniform buffer.
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
 		SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FVdbShaderParams, VdbUniformBuffer)
+#if VDB_ENGINE_MODIFICATIONS
 		// THIS ONE PARTICULARLY REQUIRES STATIC UBO BINDING, so let's do it
 		SHADER_PARAMETER_STRUCT_INCLUDE(FVirtualShadowMapSamplingParameters, VirtualShadowMapSamplingParameters)
+#endif
 		// Render targets
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
@@ -161,13 +164,16 @@ public:
 		OutEnvironment.SetDefine(TEXT("USE_FORCE_TEXTURE_MIP"), TEXT("1"));
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MAJOR"), NANOVDB_MAJOR_VERSION_NUMBER);
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MINOR"), NANOVDB_MINOR_VERSION_NUMBER);
+		OutEnvironment.SetDefine(TEXT("VDB_ENGINE_MODIFICATIONS"), VDB_ENGINE_MODIFICATIONS);
 
+#if VDB_ENGINE_MODIFICATIONS
 		bool bSupportVirtualShadowMap = IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
 		if (bSupportVirtualShadowMap)
 		{
 			OutEnvironment.SetDefine(TEXT("VIRTUAL_SHADOW_MAP"), 1);
 			FVirtualShadowMapArray::SetShaderDefines(OutEnvironment);
 		}
+#endif
 
 		// This shader takes a very long time to compile with FXC, so we pre-compile it with DXC first and then forward the optimized HLSL to FXC.
 		OutEnvironment.CompilerFlags.Add(CFLAG_PrecompileWithDXC);
@@ -260,6 +266,9 @@ typedef TVdbShaderPS<false, true, true, false, false>  FVdbShaderPS_FogVolume_Bl
 typedef TVdbShaderPS<false, true, true, false, true>  FVdbShaderPS_FogVolume_Blackbody_Color_Trilinear;
 typedef TVdbShaderPS<false, true, true, true, false>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight;
 typedef TVdbShaderPS<false, true, true, true, true>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear;
+
+
+#if VDB_CAST_SHADOWS
 
 //-----------------------------------------------------------------------------
 //					--- Shadow Depth rendering ---
@@ -592,3 +601,5 @@ private:
 };
 typedef TVdbTranslucencyShadowDepthPS<TranslucencyShadowDepth_PerspectiveCorrect> FVdbTranslucentShadowDepthPS_PerspectiveCorrect;
 typedef TVdbTranslucencyShadowDepthPS<TranslucencyShadowDepth_Standard> FVdbTranslucentShadowDepthPS_Standard;
+
+#endif // VDB_CAST_SHADOWS

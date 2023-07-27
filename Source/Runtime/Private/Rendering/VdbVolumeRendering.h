@@ -20,6 +20,8 @@
 #include "VdbDenoiser.h"
 
 class FVdbVolumeSceneProxy;
+class FVolumeMeshVertexBuffer;
+class FVolumeMeshVertexFactory;
 
 class FVdbVolumeRendering : public FSceneViewExtensionBase
 {
@@ -35,8 +37,6 @@ public:
 	void AddVdbProxy(FVdbVolumeSceneProxy* Proxy);
 	void RemoveVdbProxy(FVdbVolumeSceneProxy* Proxy);
 
-	void CreateMeshBatch(const FSceneView* View, struct FMeshBatch&, const FVdbVolumeSceneProxy*, struct FVdbVertexFactoryUserDataWrapper&, const class FMaterialRenderProxy*) const;
-
 	//~ Setters
 	void SetDenoiserMethod(EVdbDenoiserMethod Method) { DenoiserMethod = Method; }
 	//~ End Setters
@@ -50,6 +50,9 @@ public:
 	virtual int32 GetPriority() const override { return -1; }
 	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const { return true; }
 	//~ End ISceneViewExtension Interface
+
+	FVolumeMeshVertexBuffer* GetVertexBuffer() { return VertexBuffer.Get(); }
+	FVolumeMeshVertexFactory* GetVertexFactory() { return VertexFactory.Get(); }
 
 private:
 
@@ -107,8 +110,8 @@ private:
 		FRDGTexture* DepthRenderTexture);
 
 	TArray<FVdbVolumeSceneProxy*> VdbProxies;
-	TUniquePtr<class FVolumeMeshVertexBuffer> VertexBuffer;
-	TUniquePtr<class FVolumeMeshVertexFactory> VertexFactory;
+	TUniquePtr<FVolumeMeshVertexBuffer> VertexBuffer;
+	TUniquePtr<FVolumeMeshVertexFactory> VertexFactory;
 	FPostOpaqueRenderDelegate RenderPostOpaqueDelegate;
 	FPostOpaqueRenderDelegate RenderOverlayDelegate;
 	FDelegateHandle RenderPostOpaqueDelegateHandle;

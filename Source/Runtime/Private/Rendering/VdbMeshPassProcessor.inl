@@ -43,6 +43,8 @@ bool GetPassShaders(
 	return VertexShader.IsValid() && PixelShader.IsValid();
 }
 
+#if VDB_CAST_SHADOWS
+
 //-----------------------------------------------------------------------------
 //--- FVdbDepthMeshProcessor
 //-----------------------------------------------------------------------------
@@ -362,6 +364,8 @@ private:
 	FShadowDepthType ShadowDepthType;
 	const bool bDirectionalLight;
 };
+
+#endif // VDB_CAST_SHADOWS
 
 //-----------------------------------------------------------------------------
 //--- FVdbMeshProcessor

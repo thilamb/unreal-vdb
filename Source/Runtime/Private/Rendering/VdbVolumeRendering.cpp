@@ -77,6 +77,7 @@ void SetupRenderPassParameters(
 	VdbParameters->bApplyShadowTransmittance = ApplyShadowTransmittance;
 	VdbParameters->LightType = LightType;
 
+#if VDB_ENGINE_MODIFICATIONS
 	FDeferredLightUniformStruct DeferredLightUniform;
 	if (ApplyDirectLighting && (LightSceneInfo != nullptr))
 	{
@@ -101,6 +102,7 @@ void SetupRenderPassParameters(
 
 	// Indirect lighting data
 	VdbParameters->LumenGIVolumeStruct = GetLumenTranslucencyLightingParameters(GraphBuilder, ViewInfo->LumenTranslucencyGIVolume, ViewInfo->LumenFrontLayerTranslucency);
+#endif
 
 	// Pass params
 	PassParameters->View = ViewInfo->ViewUniformBuffer;
@@ -239,33 +241,6 @@ void FVdbVolumeRendering::ReleaseDelegate()
 	}
 }
 
-void FVdbVolumeRendering::CreateMeshBatch(const FSceneView* View, FMeshBatch& MeshBatch, const FVdbVolumeSceneProxy* PrimitiveProxy, FVdbVertexFactoryUserDataWrapper& UserData, const FMaterialRenderProxy* MaterialProxy) const
-{
-	const FPrimitiveViewRelevance& ViewRelevance = PrimitiveProxy->GetViewRelevance(View);
-
-	MeshBatch.bUseWireframeSelectionColoring = PrimitiveProxy->IsSelected();
-	MeshBatch.VertexFactory = VertexFactory.Get();
-	MeshBatch.MaterialRenderProxy = MaterialProxy;
-	MeshBatch.ReverseCulling = PrimitiveProxy->IsLocalToWorldDeterminantNegative() ^ PrimitiveProxy->IsIndexToLocalDeterminantNegative();
-	MeshBatch.Type = PT_TriangleList;
-	MeshBatch.DepthPriorityGroup = SDPG_World;
-	MeshBatch.bCanApplyViewModeOverrides = true;
-	MeshBatch.bUseForMaterial = true;
-	MeshBatch.CastShadow = ViewRelevance.bShadowRelevance;
-	MeshBatch.bUseForDepthPass = false;
-
-
-	FMeshBatchElement& BatchElement = MeshBatch.Elements[0];
-	BatchElement.PrimitiveUniformBuffer = PrimitiveProxy->GetUniformBuffer();
-	BatchElement.IndexBuffer = &VertexBuffer->IndexBuffer;
-	BatchElement.FirstIndex = 0;
-	BatchElement.MinVertexIndex = 0;
-	BatchElement.MaxVertexIndex = VertexBuffer->NumVertices - 1;
-	BatchElement.NumPrimitives = VertexBuffer->NumPrimitives;
-	BatchElement.VertexFactoryUserData = VertexFactory->GetUniformBuffer();
-	BatchElement.UserData = &UserData;
-}
-
 #if VDB_CAST_SHADOWS
 void FVdbVolumeRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters& Parameters)
 {
@@ -352,13 +327,11 @@ void FVdbVolumeRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters&
 								UserData.Data.IndexSize = Proxy->GetIndexSize() + 2.0 * ShaderElementData.CustomFloatData2.Y;
 								UserData.Data.IndexToLocal = Proxy->GetIndexToLocal();
 
-								FMeshBatch VolumeMesh;
-								CreateMeshBatch(&InView, VolumeMesh, Proxy, UserData, Proxy->GetMaterial()->GetRenderProxy());
-
-								if (VolumeMesh.CastShadow)
+								FMeshBatch* VolumeMesh = Proxy->GetMeshFromView(&InView)
+								if (VolumeMesh && VolumeMesh->CastShadow)
 								{
 									const uint64 DefaultBatchElementMask = ~0ull; // or 1 << 0; // LOD 0 only
-									PassMeshProcessor.AddMeshBatch(VolumeMesh, DefaultBatchElementMask, Proxy);
+									PassMeshProcessor.AddMeshBatch(*VolumeMesh, DefaultBatchElementMask, Proxy);
 								}
 							}
 						);
@@ -480,13 +453,11 @@ void FVdbVolumeRendering::TranslucentShadowDepth_RenderThread(FTranslucentShadow
 								UserData.Data.IndexSize = Proxy->GetIndexSize() + 2.0 * ShaderElementData.CustomFloatData2.Y;
 								UserData.Data.IndexToLocal = Proxy->GetIndexToLocal();
 
-								FMeshBatch VolumeMesh;
-								CreateMeshBatch(&InView, VolumeMesh, Proxy, UserData, Proxy->GetMaterial()->GetRenderProxy());
-
-								if (VolumeMesh.CastShadow)
+								FMeshBatch* VolumeMesh = Proxy->GetMeshFromView(&InView)
+								if (VolumeMesh && VolumeMesh->CastShadow)
 								{
 									const uint64 DefaultBatchElementMask = ~0ull; // or 1 << 0; // LOD 0 only
-									PassMeshProcessor.AddMeshBatch(VolumeMesh, DefaultBatchElementMask, Proxy);
+									PassMeshProcessor.AddMeshBatch(*VolumeMesh, DefaultBatchElementMask, Proxy);
 								}
 							}
 						);
@@ -687,6 +658,7 @@ void FVdbVolumeRendering::RenderLights(
 	if (!Proxy || !Proxy->GetMaterial() || !Proxy->IsVisible(View) || !Proxy->GetDensityRenderResource() || !Proxy->GetDensityRenderResource()->IsInitialized())
 		return;
 
+#if VDB_ENGINE_MODIFICATIONS
 	// Light culling
 	TArray<FLightSceneInfoCompact, TInlineAllocator<64>> LightSceneInfoCompact;
 	for (auto LightIt = Scene->Lights.CreateConstIterator(); LightIt; ++LightIt)
@@ -743,6 +715,28 @@ void FVdbVolumeRendering::RenderLights(
 		// Disable any depth test / write after first lighting pass
 		DepthRenderTexture = nullptr;
 	}
+#else
+	RenderLight(
+		// Object data
+		Proxy,
+		Translucent,
+		// Light data
+		true,
+		true,
+		false,
+		0, // LightType
+		nullptr,
+		nullptr,
+		// Scene data
+		Parameters,
+		VdbPathtrace,
+		RenderTexture,
+		DepthRenderTexture
+	);
+
+	// Disable any depth test / write after first lighting pass
+	DepthRenderTexture = nullptr;
+#endif
 }
 
 void FVdbVolumeRendering::RenderLight(
@@ -859,14 +853,13 @@ void FVdbVolumeRendering::RenderLight(
 					UserData.Data.IndexSize = Proxy->GetIndexSize() + 2.0 * ShaderElementData.CustomFloatData2.Y;
 					UserData.Data.IndexToLocal = Proxy->GetIndexToLocal();
 
-					FMeshBatch VolumeMesh;
-					CreateMeshBatch(&InView, VolumeMesh, Proxy, UserData, Proxy->GetMaterial()->GetRenderProxy());
-
-					const uint64 DefaultBatchElementMask = ~0ull; // or 1 << 0; // LOD 0 only
-					PassMeshProcessor.AddMeshBatch(VolumeMesh, DefaultBatchElementMask, Proxy);
+					if (FMeshBatch* VolumeMesh = Proxy->GetMeshFromView(&InView))
+					{
+						const uint64 DefaultBatchElementMask = ~0ull; // or 1 << 0; // LOD 0 only
+						PassMeshProcessor.AddMeshBatch(*VolumeMesh, DefaultBatchElementMask, Proxy);
+					}
 				}
 			);
-			
 		}
 	);
 }

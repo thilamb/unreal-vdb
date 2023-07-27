@@ -15,7 +15,6 @@
 #include "VdbShaders.h"
 
 IMPLEMENT_STATIC_UNIFORM_BUFFER_STRUCT(FVdbShaderParams, "VdbParams", DeferredDecals);
-IMPLEMENT_STATIC_UNIFORM_BUFFER_STRUCT(FVdbDepthShaderParams, "VdbDepthParams", DeferredDecals);
 
 // Material
 IMPLEMENT_MATERIAL_SHADER_TYPE(, FVdbShaderVS, TEXT("/Plugin/VdbVolume/Private/VdbVertexShader.usf"), TEXT("MainVS"), SF_Vertex);
@@ -39,6 +38,10 @@ IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbShaderPS_FogVolume_Blackbody_Colo
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight, TEXT("/Plugin/VdbVolume/Private/VdbFogVolume.usf"), TEXT("MainPS"), SF_Pixel);
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear, TEXT("/Plugin/VdbVolume/Private/VdbFogVolume.usf"), TEXT("MainPS"), SF_Pixel);
 
+#if VDB_CAST_SHADOWS
+
+IMPLEMENT_STATIC_UNIFORM_BUFFER_STRUCT(FVdbDepthShaderParams, "VdbDepthParams", DeferredDecals);
+
 // Shadow Depth
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbShadowDepthVS_PerspectiveCorrect, TEXT("/Plugin/VdbVolume/Private/VdbShadowDepth.usf"), TEXT("MainVS"), SF_Vertex);
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbShadowDepthVS_OutputDepth, TEXT("/Plugin/VdbVolume/Private/VdbShadowDepth.usf"), TEXT("MainVS"), SF_Vertex);
@@ -59,3 +62,5 @@ IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbTranslucentShadowDepthVS_Perspect
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbTranslucentShadowDepthVS_Standard, TEXT("/Plugin/VdbVolume/Private/VdbTranslucentShadowDepth.usf"), TEXT("MainVS"), SF_Vertex);
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbTranslucentShadowDepthPS_PerspectiveCorrect, TEXT("/Plugin/VdbVolume/Private/VdbTranslucentShadowDepth.usf"), TEXT("MainPS"), SF_Pixel);
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>, FVdbTranslucentShadowDepthPS_Standard, TEXT("/Plugin/VdbVolume/Private/VdbTranslucentShadowDepth.usf"), TEXT("MainPS"), SF_Pixel);
+
+#endif // VDB_CAST_SHADOWS

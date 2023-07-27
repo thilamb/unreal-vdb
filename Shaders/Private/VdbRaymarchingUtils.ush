@@ -30,72 +30,76 @@
 	#define HARD_SURFACE_SHADOWING 1
 #endif // HARD_SURFACE_SHADOWING
 
-// Forward Lighting Data
-#define ForwardLightData VdbParams.ForwardLightData
-#include "/Engine/Private/ForwardShadowingCommon.ush"
+#if VDB_ENGINE_MODIFICATIONS
 
-#define DeferredLightUniforms VdbParams.DeferredLight
-#define LumenGIVolumeStruct VdbParams.LumenGIVolumeStruct
-#include "/Engine/Private/DeferredLightingCommon.ush"
+	// Forward Lighting Data
+	#define ForwardLightData VdbParams.ForwardLightData
+	#include "/Engine/Private/ForwardShadowingCommon.ush"
 
-#define VOLUME_SHADOW_SAMPLING_INPUT 0
-#define Light0Shadow VdbParams
-#include "/Engine/Private/VolumeLightingCommon.ush"
+	#define DeferredLightUniforms VdbParams.DeferredLight
+	#define LumenGIVolumeStruct VdbParams.LumenGIVolumeStruct
+	#include "/Engine/Private/DeferredLightingCommon.ush"
 
-#if VIRTUAL_SHADOW_MAP
-	#include "/Engine/Private/VirtualShadowMaps/VirtualShadowMapProjectionCommon.ush"
-#endif
+	#define VOLUME_SHADOW_SAMPLING_INPUT 0
+	#define Light0Shadow VdbParams
+	#include "/Engine/Private/VolumeLightingCommon.ush"
 
-#include "/Engine/Private/LightData.ush"
+	#if VIRTUAL_SHADOW_MAP
+		#include "/Engine/Private/VirtualShadowMaps/VirtualShadowMapProjectionCommon.ush"
+	#endif
 
-float ComputeHardSurfaceShadowFactor(
-	float3 TranslatedWorldPosition,
-	inout FDeferredLightData LightData,
-	uint LightType
-)
-{
-	float HardSurfaceShadowFactor = 1.0;
+	#include "/Engine/Private/LightData.ush"
 
-#if HARD_SURFACE_SHADOWING
-	// Evaluate hard-surface shadow term
-	if (LightType == LIGHT_TYPE_DIRECTIONAL)
+	float ComputeHardSurfaceShadowFactor(
+		float3 TranslatedWorldPosition,
+		inout FDeferredLightData LightData,
+		uint LightType
+	)
 	{
-		float SceneDepth = dot(TranslatedWorldPosition - PrimaryView.TranslatedWorldCameraOrigin, View.ViewForward);
-		bool bShadowingFromValidUVArea = false;
-		float ShadowFactor = ComputeDirectionalLightDynamicShadowing(TranslatedWorldPosition, SceneDepth, bShadowingFromValidUVArea);
+		float HardSurfaceShadowFactor = 1.0;
 
-		if (bShadowingFromValidUVArea)
+	#if HARD_SURFACE_SHADOWING
+		// Evaluate hard-surface shadow term
+		if (LightType == LIGHT_TYPE_DIRECTIONAL)
 		{
-			HardSurfaceShadowFactor *= ShadowFactor;
-		}
-	}
-	else // Local lights
-	{
-		bool bShadowingFromValidUVArea = false;
-#ifdef VOLUME_SHADOW_SAMPLING_INPUT
-		float ShadowFactor = ComputeLight0VolumeShadowing(TranslatedWorldPosition, LightData.bRadialLight && !LightData.bSpotLight, LightData.bSpotLight, bShadowingFromValidUVArea);
-#else
-		float ShadowFactor = ComputeVolumeShadowing(TranslatedWorldPosition, LightData.bRadialLight && !LightData.bSpotLight, LightData.bSpotLight, bShadowingFromValidUVArea);
-#endif
+			float SceneDepth = dot(TranslatedWorldPosition - PrimaryView.TranslatedWorldCameraOrigin, View.ViewForward);
+			bool bShadowingFromValidUVArea = false;
+			float ShadowFactor = ComputeDirectionalLightDynamicShadowing(TranslatedWorldPosition, SceneDepth, bShadowingFromValidUVArea);
 
-		if (bShadowingFromValidUVArea)
+			if (bShadowingFromValidUVArea)
+			{
+				HardSurfaceShadowFactor *= ShadowFactor;
+			}
+		}
+		else // Local lights
 		{
-			HardSurfaceShadowFactor *= ShadowFactor;
+			bool bShadowingFromValidUVArea = false;
+	#ifdef VOLUME_SHADOW_SAMPLING_INPUT
+			float ShadowFactor = ComputeLight0VolumeShadowing(TranslatedWorldPosition, LightData.bRadialLight && !LightData.bSpotLight, LightData.bSpotLight, bShadowingFromValidUVArea);
+	#else
+			float ShadowFactor = ComputeVolumeShadowing(TranslatedWorldPosition, LightData.bRadialLight && !LightData.bSpotLight, LightData.bSpotLight, bShadowingFromValidUVArea);
+	#endif
+
+			if (bShadowingFromValidUVArea)
+			{
+				HardSurfaceShadowFactor *= ShadowFactor;
+			}
 		}
+
+	#if VIRTUAL_SHADOW_MAP
+		if (VdbParams.VirtualShadowMapId != INDEX_NONE)
+		{
+			FVirtualShadowMapSampleResult VirtualShadowMapSample = SampleVirtualShadowMapTranslatedWorld(VdbParams.VirtualShadowMapId, TranslatedWorldPosition);
+			HardSurfaceShadowFactor *= VirtualShadowMapSample.ShadowFactor;
+		}
+	#endif // VIRTUALSHADOW_MAP
+
+	#endif // HARD_SURFACE_SHADOWING
+
+		return HardSurfaceShadowFactor;
 	}
 
-#if VIRTUAL_SHADOW_MAP
-	if (VdbParams.VirtualShadowMapId != INDEX_NONE)
-	{
-		FVirtualShadowMapSampleResult VirtualShadowMapSample = SampleVirtualShadowMapTranslatedWorld(VdbParams.VirtualShadowMapId, TranslatedWorldPosition);
-		HardSurfaceShadowFactor *= VirtualShadowMapSample.ShadowFactor;
-	}
-#endif // VIRTUALSHADOW_MAP
-
-#endif // HARD_SURFACE_SHADOWING
-
-	return HardSurfaceShadowFactor;
-}
+#endif // VDB_ENGINE_MODIFICATIONS
 
 // Raymarch towards light. Compute shadow transmittance
 float3 GetTransmittance(
@@ -209,6 +213,7 @@ float3 GetInscattering(
 	float3 ToLight = L * 10000;
 
 	float LightAttenuation = 1.0;
+#if VDB_ENGINE_MODIFICATIONS
 	if (LightType != LIGHT_TYPE_DIRECTIONAL)
 	{
 		LightAttenuation = GetLocalLightAttenuation(TranslatedWorldPosition, LightData, ToLight, L);
@@ -226,6 +231,9 @@ float3 GetInscattering(
 	}
 
 	float HardSurfaceShadowFactor = ComputeHardSurfaceShadowFactor(TranslatedWorldPosition, LightData, LightType);
+#else
+	float HardSurfaceShadowFactor = 1.0;
+#endif	
 	Inscattering = LightData.Color * LightAttenuation * HardSurfaceShadowFactor;
 	if (any(Inscattering > 0.0) && bApplyShadowTransmittance)
 	{

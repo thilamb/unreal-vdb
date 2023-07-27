@@ -48,6 +48,7 @@ public:
 	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("VDB_ENGINE_MODIFICATIONS"), VDB_ENGINE_MODIFICATIONS);
 	}
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
@@ -55,9 +56,11 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, InputTexture)
 		SHADER_PARAMETER_SAMPLER(SamplerState, InputSampler)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, DepthTexture)
+#if VDB_ENGINE_MODIFICATIONS
 		// Fog (Height + Volumetric + Atmospheric)
 		SHADER_PARAMETER(int, EnableFog)
 		SHADER_PARAMETER_RDG_UNIFORM_BUFFER(FFogUniformParameters, FogStruct)
+#endif // VDB_ENGINE_MODIFICATIONS
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
 };
@@ -85,15 +88,19 @@ void VdbComposite::CompositeFullscreen(FRDGBuilder& GraphBuilder, FRDGTexture* I
 	FIntRect Viewport(FIntPoint(0, 0), OutTexture->Desc.Extent);
 
 	const FViewInfo* ViewInfo = static_cast<const FViewInfo*>(View);
+#if VDB_ENGINE_MODIFICATIONS
 	TRDGUniformBufferRef<FFogUniformParameters> FogBuffer = CreateFogUniformBuffer(GraphBuilder, *ViewInfo);
+#endif
 
 	FCompositePS::FParameters* PassParameters = GraphBuilder.AllocParameters<FCompositePS::FParameters>();
 	PassParameters->ViewUniformBuffer = View->ViewUniformBuffer;
 	PassParameters->InputTexture = InputTexture;
 	PassParameters->InputSampler = TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 	PassParameters->DepthTexture = InDepthTexture ? InDepthTexture : InputTexture;
+#if VDB_ENGINE_MODIFICATIONS
 	PassParameters->EnableFog = FVdbCVars::CVarVolumetricVdbApplyFog.GetValueOnRenderThread();
 	PassParameters->FogStruct = FogBuffer;
+#endif
 	PassParameters->RenderTargets[0] = FRenderTargetBinding(OutTexture, Clear ? ERenderTargetLoadAction::EClear : ERenderTargetLoadAction::ELoad);
 	if (InDepthTexture)
 	{

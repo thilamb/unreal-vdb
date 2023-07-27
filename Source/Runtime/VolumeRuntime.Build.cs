@@ -88,6 +88,7 @@ public class VolumeRuntime : ModuleRules
 			}
 			);
 
-		PublicDefinitions.Add("VDB_CAST_SHADOWS=1");
+		PublicDefinitions.Add("VDB_ENGINE_MODIFICATIONS=0");
+		PublicDefinitions.Add("VDB_CAST_SHADOWS=0");
 	}
 }

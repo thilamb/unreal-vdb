@@ -19,14 +19,19 @@
 #include "/Engine/Generated/Material.ush"
 #include "/Engine/Generated/VertexFactory.ush"
 
-#define DeferredLightUniforms VdbParams.DeferredLight
-#define LumenGIVolumeStruct VdbParams.LumenGIVolumeStruct
-#include "/Engine/Private/DeferredLightingCommon.ush"
-#include "/Engine/Private/LightDataUniforms.ush"
-#include "/Engine/Private/SHCommon.ush"
-#define FrontLayerTranslucencyReflectionsStruct LumenGIVolumeStruct
-#define RadianceCacheInterpolation LumenGIVolumeStruct
-#include "/Engine/Private/Lumen/LumenTranslucencyVolumeShared.ush"
+#if VDB_ENGINE_MODIFICATIONS
+	#define DeferredLightUniforms VdbParams.DeferredLight
+	#define LumenGIVolumeStruct VdbParams.LumenGIVolumeStruct
+	#include "/Engine/Private/DeferredLightingCommon.ush"
+	#include "/Engine/Private/LightDataUniforms.ush"
+	#include "/Engine/Private/SHCommon.ush"
+	#define FrontLayerTranslucencyReflectionsStruct LumenGIVolumeStruct
+	#define RadianceCacheInterpolation LumenGIVolumeStruct
+	#include "/Engine/Private/Lumen/LumenTranslucencyVolumeShared.ush"
+#else
+	#include "/Engine/Private/LightData.ush"
+	#include "/Engine/Private/SHCommon.ush"
+#endif // VDB_ENGINE_MODIFICATIONS
 
 int4 CustomIntData0;
 int4 CustomIntData1;
@@ -75,7 +80,7 @@ Texture2D				BlackbodyColor; // curve atlas
 #include "/Plugin/VdbVolume/Private/VdbMaterial.ush"
 #include "/Plugin/VdbVolume/Private/VdbRaymarchingUtils.ush"
 
-#define DIM_USE_LUMEN_GI 1 // TODO use permutations
+#define DIM_USE_LUMEN_GI VDB_ENGINE_MODIFICATIONS
 
 //-----------------------------------------------------------------------------------------------------------
 // Tracing through a NanoVDB volume
@@ -111,7 +116,14 @@ float4 RaymarchFogVolume(
 	float3 Radiance = 0.0;
 
 	#if !MATERIAL_SHADINGMODEL_UNLIT
-		FDeferredLightData LightData = InitDeferredLightFromUniforms(VdbParams.LightType);
+		#if VDB_ENGINE_MODIFICATIONS
+			FDeferredLightData LightData = InitDeferredLightFromUniforms(VdbParams.LightType);
+		#else
+			// No Light info, use only directional data that is available globally
+			FDeferredLightData LightData;
+			LightData.Direction = View.DirectionalLightDirection;
+			LightData.Color = View.DirectionalLightColor;
+		#endif
 
 		float3 LocalDirLight = WorldToIndexDirection(LightData.Direction, WorldToLocal, DensitySampler.GridBuffer, DensitySampler.Grid);
 		float CosThetaPhase = dot(LocalDirLight, Ray.Direction);

@@ -81,6 +81,52 @@ FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetCompon
 	bCastDynamicShadow = true;
 }
 
+FMeshBatch* FVdbVolumeSceneProxy::CreateMeshBatch(const FSceneView* View, int32 ViewIndex, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector, FVdbVolumeRendering* VolRendering, FVdbVertexFactoryUserDataWrapper& UserData, const FMaterialRenderProxy* MaterialProxy) const
+{
+	FVolumeMeshVertexBuffer* VertexBuffer = VolRendering->GetVertexBuffer();
+	FVolumeMeshVertexFactory* VertexFactory = VolRendering->GetVertexFactory();
+
+	FMeshBatch& MeshBatch = Collector.AllocateMesh();
+	MeshBatch.bWireframe = AllowDebugViewmodes() && ViewFamily.EngineShowFlags.Wireframe;
+
+	const FPrimitiveViewRelevance& ViewRelevance = GetViewRelevance(View);
+
+	MeshBatch.bUseWireframeSelectionColoring = IsSelected();
+	MeshBatch.VertexFactory = VertexFactory;
+	MeshBatch.MaterialRenderProxy = MaterialProxy;
+	MeshBatch.ReverseCulling = IsLocalToWorldDeterminantNegative() ^ IsIndexToLocalDeterminantNegative();
+	MeshBatch.Type = PT_TriangleList;
+	MeshBatch.DepthPriorityGroup = SDPG_World;
+	MeshBatch.bCanApplyViewModeOverrides = false;
+	MeshBatch.bUseForMaterial = true;
+	MeshBatch.CastShadow = ViewRelevance.bShadowRelevance;
+	MeshBatch.bUseForDepthPass = false;
+
+	FMeshBatchElement& BatchElement = MeshBatch.Elements[0];
+
+	// Draw the mesh.
+#if 0
+	FDynamicPrimitiveUniformBuffer& DynamicPrimitiveUniformBuffer = Collector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
+	DynamicPrimitiveUniformBuffer.Set(GetLocalToWorld(), GetLocalToWorld(), GetBounds(), GetLocalBounds(), false, false, AlwaysHasVelocity());
+	BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
+	BatchElement.PrimitiveIdMode = PrimID_DynamicPrimitiveShaderData;
+#else
+	BatchElement.PrimitiveUniformBuffer = GetUniformBuffer();
+#endif
+
+	BatchElement.IndexBuffer = &VertexBuffer->IndexBuffer;
+	BatchElement.FirstIndex = 0;
+	BatchElement.MinVertexIndex = 0;
+	BatchElement.MaxVertexIndex = VertexBuffer->NumVertices - 1;
+	BatchElement.NumPrimitives = VertexBuffer->NumPrimitives;
+	BatchElement.VertexFactoryUserData = VertexFactory->GetUniformBuffer();
+	BatchElement.UserData = &UserData;
+
+	Collector.AddMesh(ViewIndex, MeshBatch);
+
+	return &MeshBatch;
+}
+
 // This setups associated volume mesh for built-in Unreal passes. 
 // Actual rendering is prepared FVdbVolumeRendering::PostOpaque_RenderThread.
 void FVdbVolumeSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
@@ -104,12 +150,8 @@ void FVdbVolumeSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*
 			UserData.Data.IndexSize = GetIndexSize();
 			UserData.Data.IndexToLocal = GetIndexToLocal();
 
-			FMeshBatch& Mesh = Collector.AllocateMesh();
-			Mesh.bWireframe = AllowDebugViewmodes() && ViewFamily.EngineShowFlags.Wireframe;
-
-			VdbMaterialRenderExtension->CreateMeshBatch(View, Mesh, this, UserData, Material->GetRenderProxy());
-
-			Collector.AddMesh(ViewIndex, Mesh);
+			FMeshBatch* Mesh = CreateMeshBatch(View, ViewIndex, ViewFamily, Collector, VdbMaterialRenderExtension.Get(), UserData, Material->GetRenderProxy());
+			MeshBatchPerView.Add(View, Mesh);
 
 			{
 				FPrimitiveDrawInterface* PDI = Collector.GetPDI(ViewIndex);

@@ -51,12 +51,14 @@ public:
 	bool UseImprovedEnvLight() const { return ImprovedEnvLight; }
 	bool UseTrilinearSampling() const { return TrilinearSampling; }
 	bool RendersAfterTransparents() const { return RenderAfterTransparents; }
-	void ResetVisibility() { VisibleViews.Empty(4); }
+	void ResetVisibility() { VisibleViews.Empty(4); MeshBatchPerView.Empty(4); }
 	bool IsVisible(const FSceneView* View) const { return VisibleViews.Find(View) != INDEX_NONE; }
 	void Update(const FMatrix44f& IndexToLocal, const FVector3f& IndexMin, const FVector3f& IndexSize, FVdbRenderBuffer* DensityRenderBuffer, FVdbRenderBuffer* TemperatureRenderBuffer, FVdbRenderBuffer* ColorRenderBuffer);
 	void UpdateCurveAtlasTex();
 
 	FRDGTextureRef GetOrCreateRenderTarget(FRDGBuilder& GraphBuilder, const FIntPoint& RtSize, bool EvenFrame);
+
+	FMeshBatch* GetMeshFromView(const FSceneView* View) { return MeshBatchPerView[View]; }
 
 	//~ Begin FPrimitiveSceneProxy Interface
 	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
@@ -68,6 +70,8 @@ protected:
 	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
 	virtual uint32 GetMemoryFootprint() const override { return(sizeof(*this) + GetAllocatedSize()); }
 	//~ End FPrimitiveSceneProxy Interface
+
+	FMeshBatch* CreateMeshBatch(const FSceneView* View, int32 ViewIndex, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector, FVdbVolumeRendering* VolRendering, struct FVdbVertexFactoryUserDataWrapper& UserData, const FMaterialRenderProxy* MaterialProxy) const;
 
 private:
 	
@@ -104,6 +108,7 @@ private:
 	FMatrix44f IndexToLocal;
 
 	mutable TArray<const FSceneView*> VisibleViews;
+	mutable TMap<const FSceneView*, FMeshBatch*> MeshBatchPerView;
 
 	// For path-tracing accumulation only
 	TRefCountPtr<IPooledRenderTarget> OffscreenRenderTarget[2];
