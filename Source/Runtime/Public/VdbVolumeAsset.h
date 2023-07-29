@@ -41,7 +41,7 @@ public:
 	class UAssetImportData* GetAssetImportData() { return AssetImportData; }
 #endif
 
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, Category = VdbGrids)
 	TArray<UVdbVolumeBase*> VdbVolumes;
 
 #if WITH_EDITORONLY_DATA
