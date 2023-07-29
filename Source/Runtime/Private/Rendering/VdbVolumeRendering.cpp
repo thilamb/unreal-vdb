@@ -720,10 +720,10 @@ void FVdbVolumeRendering::RenderLights(
 		// Object data
 		Proxy,
 		Translucent,
-		// Light data
-		true,
-		true,
-		false,
+		// Hardcoded directional light data
+		true, // bApplyEmissionAndTransmittance
+		true, // bApplyDirectLighting
+		true, // bApplyShadowTransmittance
 		0, // LightType
 		nullptr,
 		nullptr,

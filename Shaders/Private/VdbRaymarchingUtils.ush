@@ -213,6 +213,7 @@ float3 GetInscattering(
 	float3 ToLight = L * 10000;
 
 	float LightAttenuation = 1.0;
+	float HardSurfaceShadowFactor = 1.0;
 #if VDB_ENGINE_MODIFICATIONS
 	if (LightType != LIGHT_TYPE_DIRECTIONAL)
 	{
@@ -230,10 +231,9 @@ float3 GetInscattering(
 		}
 	}
 
-	float HardSurfaceShadowFactor = ComputeHardSurfaceShadowFactor(TranslatedWorldPosition, LightData, LightType);
-#else
-	float HardSurfaceShadowFactor = 1.0;
-#endif	
+	HardSurfaceShadowFactor = ComputeHardSurfaceShadowFactor(TranslatedWorldPosition, LightData, LightType);
+#endif
+	
 	Inscattering = LightData.Color * LightAttenuation * HardSurfaceShadowFactor;
 	if (any(Inscattering > 0.0) && bApplyShadowTransmittance)
 	{
