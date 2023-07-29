@@ -21,7 +21,7 @@ I highly recommend reading these first:
 
 [The initial README documentation.](https://github.com/eidosmontreal/unreal-vdb/blob/main/README.md)
 
-[Some help to make your volumes look nice.](README.md)
+[Some help to make your volumes look nice.](HELPME.md)
 
 
 ## Instructions
