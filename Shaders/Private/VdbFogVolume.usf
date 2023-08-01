@@ -54,7 +54,9 @@ Texture2D				BlackbodyColor; // curve atlas
 #define CURVE_INDEX CustomIntData1.x
 #define CURVE_HEIGHT CustomIntData1.y
 #define TEMPERATURE_ONLY CustomIntData1.w
-#define LOCAL_STEP_SIZE CustomFloatData0.x
+#define LOCAL_STE
+#define TEMPERATURE_ONLY CustomIntData1.w
+#define LOCAL_STEP_SIZE CustomFloatData0.xP_SIZE CustomFloatData0.x
 #define SHADOW_STEP_SIZE_MULT CustomFloatData0.y
 #define VOXEL_SIZE CustomFloatData0.z
 #define JITTER_MULT CustomFloatData0.w
@@ -276,9 +278,9 @@ float4 RaymarchFogVolume(
 			float3 WorldDir = IndexToWorldDirection(ShadowDirection, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
 			EnvLight = GetSkySHDiffuse(WorldDir) * View.SkyLightColor.rgb;
 
-			Radiance += StepTransmittance * Scattering * EnvLight * (ShadowTransmittance + AMBIENT);
+			Radiance += StepTransmittance * Scattering * EnvLight * ShadowTransmittance * AMBIENT;
 	#else
-			Radiance += StepTransmittance * Scattering * EnvLight * (1.0 + AMBIENT);
+			Radiance += StepTransmittance * Scattering * EnvLight * AMBIENT;
 	#endif
 		
 	#if DIM_USE_LUMEN_GI
@@ -297,8 +299,8 @@ float4 RaymarchFogVolume(
 		#endif	
 
 			// Note: Phase is accounted for in spherical hamonic calculation
-			Radiance += StepTransmittance * Scattering * IndirectInscattering;
-	#endif // DIM_USE_LUMEN_GI
+			Radiance += StepTransmittance * Scattering * IndirectInscattering * AMBIENT;
+#endif // DIM_USE_LUMEN_GI
 		}
 
 #endif
