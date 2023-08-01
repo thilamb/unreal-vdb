@@ -54,9 +54,7 @@ Texture2D				BlackbodyColor; // curve atlas
 #define CURVE_INDEX CustomIntData1.x
 #define CURVE_HEIGHT CustomIntData1.y
 #define TEMPERATURE_ONLY CustomIntData1.w
-#define LOCAL_STE
-#define TEMPERATURE_ONLY CustomIntData1.w
-#define LOCAL_STEP_SIZE CustomFloatData0.xP_SIZE CustomFloatData0.x
+#define LOCAL_STEP_SIZE CustomFloatData0.x
 #define SHADOW_STEP_SIZE_MULT CustomFloatData0.y
 #define VOXEL_SIZE CustomFloatData0.z
 #define JITTER_MULT CustomFloatData0.w
