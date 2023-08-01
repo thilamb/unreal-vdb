@@ -327,7 +327,7 @@ void FVdbVolumeRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters&
 								UserData.Data.IndexSize = Proxy->GetIndexSize() + 2.0 * ShaderElementData.CustomFloatData2.Y;
 								UserData.Data.IndexToLocal = Proxy->GetIndexToLocal();
 
-								FMeshBatch* VolumeMesh = Proxy->GetMeshFromView(&InView)
+								FMeshBatch* VolumeMesh = Proxy->GetMeshFromView(&InView);
 								if (VolumeMesh && VolumeMesh->CastShadow)
 								{
 									const uint64 DefaultBatchElementMask = ~0ull; // or 1 << 0; // LOD 0 only
@@ -453,7 +453,7 @@ void FVdbVolumeRendering::TranslucentShadowDepth_RenderThread(FTranslucentShadow
 								UserData.Data.IndexSize = Proxy->GetIndexSize() + 2.0 * ShaderElementData.CustomFloatData2.Y;
 								UserData.Data.IndexToLocal = Proxy->GetIndexToLocal();
 
-								FMeshBatch* VolumeMesh = Proxy->GetMeshFromView(&InView)
+								FMeshBatch* VolumeMesh = Proxy->GetMeshFromView(&InView);
 								if (VolumeMesh && VolumeMesh->CastShadow)
 								{
 									const uint64 DefaultBatchElementMask = ~0ull; // or 1 << 0; // LOD 0 only

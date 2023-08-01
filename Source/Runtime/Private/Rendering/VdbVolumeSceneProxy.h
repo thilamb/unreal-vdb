@@ -58,7 +58,7 @@ public:
 
 	FRDGTextureRef GetOrCreateRenderTarget(FRDGBuilder& GraphBuilder, const FIntPoint& RtSize, bool EvenFrame);
 
-	FMeshBatch* GetMeshFromView(const FSceneView* View) { return MeshBatchPerView[View]; }
+	FMeshBatch* GetMeshFromView(const FSceneView* View) const { return MeshBatchPerView[View]; }
 
 	//~ Begin FPrimitiveSceneProxy Interface
 	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
