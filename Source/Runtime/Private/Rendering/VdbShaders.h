@@ -332,6 +332,7 @@ public:
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MAJOR"), NANOVDB_MAJOR_VERSION_NUMBER);
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MINOR"), NANOVDB_MINOR_VERSION_NUMBER);
 		OutEnvironment.SetDefine(TEXT("MATERIALBLENDING_MASKED"), TEXT("1"));
+		OutEnvironment.SetDefine(TEXT("VDB_ENGINE_MODIFICATIONS"), VDB_ENGINE_MODIFICATIONS);
 	}
 
 	FVdbShadowDepthVS() = default;
@@ -439,6 +440,7 @@ public:
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MAJOR"), NANOVDB_MAJOR_VERSION_NUMBER);
 		OutEnvironment.SetDefine(TEXT("SHADER_VERSION_MINOR"), NANOVDB_MINOR_VERSION_NUMBER);
 		OutEnvironment.SetDefine(TEXT("MATERIALBLENDING_MASKED"), TEXT("1"));
+		OutEnvironment.SetDefine(TEXT("VDB_ENGINE_MODIFICATIONS"), VDB_ENGINE_MODIFICATIONS);
 	}
 
 	void GetShaderBindings(

@@ -335,7 +335,7 @@ void MainPS(
 	if (!Valid) discard;
 	
 	float4 WorldPos = float4(LastIntersection.xyz, 1.0);
-#if ONEPASS_POINTLIGHT_SHADOW
+	#if ONEPASS_POINTLIGHT_SHADOW
 		float4 ClipPos = mul(WorldPos, PassStruct.ShadowViewProjectionMatrices[LayerIndex]);
 		OutDepth = ClipPos.z / ClipPos.w;
 	#else
