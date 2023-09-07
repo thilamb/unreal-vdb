@@ -53,6 +53,7 @@ FVolumeRuntimeModule::TRenderExtensionPtr FVolumeRuntimeModule::GetRenderExtensi
 
 void FVolumeRuntimeModule::RegisterDetailsCustomizations()
 {
+#if WITH_EDITOR
 	auto& PropertyModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 
 	// Register our customization to be used by a class 'UMyClass' or 'AMyClass'. Note the prefix must be dropped.
@@ -62,7 +63,7 @@ void FVolumeRuntimeModule::RegisterDetailsCustomizations()
 	);
 
 	PropertyModule.NotifyCustomizationModuleChanged();
-
+#endif
 }
 
 FVolumeRuntimeModule::TRenderExtensionPtr FVolumeRuntimeModule::GetOrCreateRenderExtension(UTextureRenderTarget2D* DefaultRenderTarget)

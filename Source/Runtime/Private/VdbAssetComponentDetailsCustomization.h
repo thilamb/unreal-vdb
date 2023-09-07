@@ -14,6 +14,8 @@
 
 #pragma once
 
+#if WITH_EDITOR
+
 #include "CoreMinimal.h"
 #include "IDetailCustomization.h"
 
@@ -55,3 +57,5 @@ private:
 	UVdbAssetComponent* CurrentComponent = nullptr;
 	IDetailLayoutBuilder* LayoutBuilder = nullptr;
 };
+
+#endif

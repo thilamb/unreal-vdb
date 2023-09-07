@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#if WITH_EDITOR
+
 #include "VdbAssetComponentDetailsCustomization.h"
 #include "VdbAssetComponent.h"
 
@@ -311,3 +313,5 @@ void FVdbAssetComponentDetails::ForceRefresh()
 }
 
 #undef LOCTEXT_NAMESPACE
+
+#endif
