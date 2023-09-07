@@ -451,7 +451,7 @@ public:
 			const ERasterizerFillMode MeshFillMode = FM_Solid;
 			const ERasterizerCullMode MeshCullMode = MeshBatch.ReverseCulling ? CM_CW : CM_CCW;
 
-#define PROCESS_SHADER(shader) { Process<FVdbShaderVS, ##shader>(MeshBatch, BatchElementMask, PrimitiveSceneProxy, *MaterialRenderProxy, *Material, StaticMeshId, MeshFillMode, MeshCullMode); }
+#define PROCESS_SHADER(shader) { Process<FVdbShaderVS, shader>(MeshBatch, BatchElementMask, PrimitiveSceneProxy, *MaterialRenderProxy, *Material, StaticMeshId, MeshFillMode, MeshCullMode); }
 
 			if (bLevelSet)
 			{

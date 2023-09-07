@@ -24,22 +24,22 @@ void FVdbRenderBuffer::SetData(uint64 InVolumeMemorySize, const uint8* InVolumeG
 	DataPtr = (void*)InVolumeGridData;
 }
 
-void FVdbRenderBuffer::InitRHI()
+void FVdbRenderBuffer::InitRHI(FRHICommandListBase& RHICmdList)
 {
 	check(IsInRenderingThread());
 
 	const uint32 Stride = sizeof(uint32);
 
 	FRHIResourceCreateInfo CreateInfo(TEXT("FVdbRenderBuffer"));
-	Buffer = RHICreateStructuredBuffer(Stride, ByteSize, BUF_Static | BUF_ShaderResource, CreateInfo);
+	Buffer = RHICmdList.CreateStructuredBuffer(Stride, ByteSize, BUF_Static | BUF_ShaderResource, CreateInfo);
 	
-	BufferSRV = RHICreateShaderResourceView(Buffer);
+	BufferSRV = RHICmdList.CreateShaderResourceView(Buffer);
 
 	if (DataPtr)
 	{
-		uint32* BufferMemory = (uint32*)RHILockBuffer(Buffer, 0, ByteSize, RLM_WriteOnly);
+		uint32* BufferMemory = (uint32*)RHICmdList.LockBuffer(Buffer, 0, ByteSize, RLM_WriteOnly);
 		FMemory::Memcpy(BufferMemory, DataPtr, ByteSize);
-		RHIUnlockBuffer(Buffer);
+		RHICmdList.UnlockBuffer(Buffer);
 	}
 
 	INC_MEMORY_STAT_BY(STAT_VdbGPUDataInterfaceMemory, ByteSize);
@@ -66,9 +66,9 @@ void FVdbRenderBuffer::UploadData(uint64 MemByteSize, const uint8* MemPtr)
 	ENQUEUE_RENDER_COMMAND(UplodaVdbGpuData)(
 		[this, MemByteSize, MemPtr](FRHICommandList& RHICmdList)
 		{
-			uint32* BufferMemory = (uint32*)RHILockBuffer(Buffer, 0, MemByteSize, RLM_WriteOnly);
+			uint32* BufferMemory = (uint32*)RHICmdList.LockBuffer(Buffer, 0, MemByteSize, RLM_WriteOnly);
 			FMemory::Memcpy(BufferMemory, MemPtr, MemByteSize);
-			RHIUnlockBuffer(Buffer);
+			RHICmdList.UnlockBuffer(Buffer);
 
 			UploadFinished = true;
 		});

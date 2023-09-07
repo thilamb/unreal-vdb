@@ -246,7 +246,7 @@ template<typename Func>
 void GridBuilder<ValueT, BuildT, StatsT>::
 operator()(const Func& func, const CoordBBox& voxelBBox, ValueT delta)
 {
-    static_assert(is_same<ValueT, typename std::result_of<Func(const Coord&)>::type>::value, "GridBuilder: mismatched ValueType");
+    //static_assert(is_same<ValueT, typename std::result_of<Func(const Coord&)>::type>::value, "GridBuilder: mismatched ValueType");
     mDelta = delta; // delta = voxel size for level sets, else 0
 
     using LeafT = BuildLeaf;

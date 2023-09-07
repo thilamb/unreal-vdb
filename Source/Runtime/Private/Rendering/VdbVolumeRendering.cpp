@@ -126,13 +126,13 @@ bool FVdbVolumeRendering::ShouldRenderVolumetricVdb() const
 	return FVdbCVars::CVarVolumetricVdb.GetValueOnRenderThread() && VertexFactory.IsValid();
 }
 
-void FVdbVolumeRendering::InitRendering()
+void FVdbVolumeRendering::InitRendering(FRHICommandListImmediate& RHICmdList)
 {
 	check(IsInRenderingThread());
 
 	ReleaseRendering();
 	{
-		InitVolumeMesh();
+		InitVolumeMesh(RHICmdList);
 		InitVertexFactory();
 		InitDelegate();
 	}
@@ -154,7 +154,7 @@ void FVdbVolumeRendering::Init(UTextureRenderTarget2D* DefaultRenderTarget)
 	if (IsInRenderingThread())
 	{
 		DefaultVdbRenderTarget = DefaultRenderTarget;
-		InitRendering();
+		InitRendering(FRHICommandListExecutor::GetImmediateCommandList());
 	}
 	else
 	{
@@ -182,10 +182,10 @@ void FVdbVolumeRendering::Release()
 	}
 }
 
-void FVdbVolumeRendering::InitVolumeMesh()
+void FVdbVolumeRendering::InitVolumeMesh(FRHICommandListImmediate& RHICmdList)
 {
 	VertexBuffer = MakeUnique<FVolumeMeshVertexBuffer>();
-	VertexBuffer->InitResource();
+	VertexBuffer->InitResource(RHICmdList);
 }
 
 void FVdbVolumeRendering::InitVertexFactory()
@@ -834,7 +834,14 @@ void FVdbVolumeRendering::RenderLight(
 
 					FTexture* CurveAtlas = Proxy->GetBlackbodyAtlasResource();
 					FTextureRHIRef CurveAtlasRHI = CurveAtlas ? CurveAtlas->GetTextureRHI() : nullptr;
-					ShaderElementData.BlackbodyColorSRV = CurveAtlasRHI ? TexCache.GetOrCreateSRV(CurveAtlasRHI, FRHITextureSRVCreateInfo()) : GBlackTextureWithSRV->ShaderResourceViewRHI;
+					if (CurveAtlasRHI)
+					{
+						ShaderElementData.BlackbodyColorSRV = TexCache.GetOrCreateSRV(CurveAtlasRHI, FRHITextureSRVCreateInfo());
+					}
+					else
+					{
+						ShaderElementData.BlackbodyColorSRV = GBlackTextureWithSRV->ShaderResourceViewRHI;
+					}
 
 					FVdbMeshProcessor PassMeshProcessor(
 						InView.Family->Scene->GetRenderScene(),

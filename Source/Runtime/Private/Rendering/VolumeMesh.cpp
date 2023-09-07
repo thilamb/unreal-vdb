@@ -73,12 +73,12 @@ FVolumeMeshVertexBuffer::FVolumeMeshVertexBuffer()
 	NumVertices = Vertices.Num();
 }
 
-void FVolumeMeshVertexBuffer::InitResource()
+void FVolumeMeshVertexBuffer::InitResource(FRHICommandListBase& RHICmdList)
 {
-	Buffers.PositionVertexBuffer.InitResource();
-	Buffers.StaticMeshVertexBuffer.InitResource();
-	Buffers.ColorVertexBuffer.InitResource();
-	IndexBuffer.InitResource();
+	Buffers.PositionVertexBuffer.InitResource(RHICmdList);
+	Buffers.StaticMeshVertexBuffer.InitResource(RHICmdList);
+	Buffers.ColorVertexBuffer.InitResource(RHICmdList);
+	IndexBuffer.InitResource(RHICmdList);
 }
 
 void FVolumeMeshVertexBuffer::ReleaseResource()
@@ -98,7 +98,7 @@ void FVolumeMeshVertexFactory::Init(FVolumeMeshVertexBuffer* InVertexBuffer)
 	VertexBuffer = InVertexBuffer;
 
 	// Init buffers resources
-	VertexBuffer->UpdateRHI();
+	VertexBuffer->UpdateRHI(FRHICommandListExecutor::GetImmediateCommandList());
 
 	// Init vertex factory resources
 	{
@@ -112,7 +112,7 @@ void FVolumeMeshVertexFactory::Init(FVolumeMeshVertexBuffer* InVertexBuffer)
 
 		SetData(VertexData);
 
-		InitResource();
+		InitResource(FRHICommandListExecutor::GetImmediateCommandList());
 	}
 }
 

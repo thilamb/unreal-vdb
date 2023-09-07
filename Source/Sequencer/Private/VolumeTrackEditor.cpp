@@ -402,7 +402,7 @@ TSharedPtr<SWidget> FVolumeTrackEditor::BuildOutlinerEditWidget(const FGuid& Obj
 		{
 			TWeakPtr<ISequencer> WeakSequencer = GetSequencer();
 
-			auto SubMenuCallback = [=]() -> TSharedRef<SWidget>
+			auto SubMenuCallback = [this, ObjectBinding, Track, TrackHandler]() -> TSharedRef<SWidget>
 			{
 				FMenuBuilder MenuBuilder(true, nullptr);
 

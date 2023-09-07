@@ -17,9 +17,27 @@
 #include "CoreMinimal.h"
 
 THIRD_PARTY_INCLUDES_START
+
+#ifdef _MSC_VER
+#pragma warning (push)
+#pragma warning (disable : 4146) // unary minus operator applied to unsigned type, result still unsigned
+#pragma warning (disable : 6297) // Arithmetic overflow:  32-bit value is shifted, then cast to 64-bit value.  Results might not be an expected value.
+#endif
+
+#ifndef M_PI
+#define M_PI    3.14159265358979323846
+#define LOCAL_M_PI 1
+#endif
+
+#ifndef M_PI_2
+#define M_PI_2  1.57079632679489661923 // pi/2
+#define LOCAL_M_PI_2 1
+#endif
+
 #include <nanovdb/NanoVDB.h>
 #include <nanovdb/util/GridHandle.h>
 #include <openvdb/openvdb.h>
+
 THIRD_PARTY_INCLUDES_END
 
 struct FVdbGridInfo;

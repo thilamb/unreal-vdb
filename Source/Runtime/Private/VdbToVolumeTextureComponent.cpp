@@ -224,7 +224,7 @@ void UVdbToVolumeTextureComponent::CopyVdbToVolume_RenderThread(
 	PassParameters->VolumeSize = IndexSize;
 	PassParameters->TextureSize = TextureSize;
 	PassParameters->VdbPrimary = PrimaryRenderBuffer->GetBufferSRV();
-	PassParameters->VdbSecondary = SecondaryRenderBuffer ? SecondaryRenderBuffer->GetBufferSRV() : PassParameters->VdbPrimary;
+	PassParameters->VdbSecondary = SecondaryRenderBuffer ? SecondaryRenderBuffer->GetBufferSRV() : PrimaryRenderBuffer->GetBufferSRV();
 	PassParameters->OutputTexture = ResourceVolume->GetUnorderedAccessViewRHI();
 
 	GraphBuilder.AddPass(

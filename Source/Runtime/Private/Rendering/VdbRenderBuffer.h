@@ -25,7 +25,7 @@ public:
 	void UploadData(uint64 MemByteSize, const uint8* MemPtr);
 	bool IsUploadFinished() const { return UploadFinished; }
 
-	virtual void InitRHI() override;
+	virtual void InitRHI(FRHICommandListBase& RHICmdList) override;
 	virtual void ReleaseRHI() override;
 
 	FORCEINLINE uint64 GetCapacity() const { return ByteSize; }

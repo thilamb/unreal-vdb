@@ -66,10 +66,10 @@ private:
 		bool FirstRender = true;
 	};
 
-	void InitRendering();
+	void InitRendering(FRHICommandListImmediate& RHICmdList);
 	void ReleaseRendering();
 
-	void InitVolumeMesh();
+	void InitVolumeMesh(FRHICommandListImmediate& RHICmdList);
 	void InitVertexFactory();
 	void InitDelegate();
 	void ReleaseDelegate();

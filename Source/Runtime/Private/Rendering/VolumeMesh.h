@@ -30,7 +30,7 @@ public:
 
 	FVolumeMeshVertexBuffer();
 
-	virtual void InitResource() override;
+	virtual void InitResource(FRHICommandListBase& RHICmdList) override;
 	virtual void ReleaseResource() override;
 };
 
