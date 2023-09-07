@@ -722,7 +722,7 @@ void FVdbVolumeRendering::RenderLights(
 		Translucent,
 		// Hardcoded directional light data
 		true, // bApplyEmissionAndTransmittance
-		true, // bApplyDirectLighting
+		Scene->SimpleDirectionalLight != nullptr, // bApplyDirectLighting
 		true, // bApplyShadowTransmittance
 		0, // LightType
 		nullptr,
