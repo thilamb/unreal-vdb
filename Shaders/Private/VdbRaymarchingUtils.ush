@@ -36,10 +36,6 @@
 	#define ForwardLightData VdbParams.ForwardLightData
 	#include "/Engine/Private/ForwardShadowingCommon.ush"
 
-	#define DeferredLightUniforms VdbParams.DeferredLight
-	#define LumenGIVolumeStruct VdbParams.LumenGIVolumeStruct
-	#include "/Engine/Private/DeferredLightingCommon.ush"
-
 	#define VOLUME_SHADOW_SAMPLING_INPUT 0
 	#define Light0Shadow VdbParams
 	#include "/Engine/Private/VolumeLightingCommon.ush"
@@ -47,8 +43,6 @@
 	#if VIRTUAL_SHADOW_MAP
 		#include "/Engine/Private/VirtualShadowMaps/VirtualShadowMapProjectionCommon.ush"
 	#endif
-
-	#include "/Engine/Private/LightData.ush"
 
 	float ComputeHardSurfaceShadowFactor(
 		float3 TranslatedWorldPosition,
@@ -74,11 +68,7 @@
 		else // Local lights
 		{
 			bool bShadowingFromValidUVArea = false;
-	#ifdef VOLUME_SHADOW_SAMPLING_INPUT
 			float ShadowFactor = ComputeLight0VolumeShadowing(TranslatedWorldPosition, LightData.bRadialLight && !LightData.bSpotLight, LightData.bSpotLight, bShadowingFromValidUVArea);
-	#else
-			float ShadowFactor = ComputeVolumeShadowing(TranslatedWorldPosition, LightData.bRadialLight && !LightData.bSpotLight, LightData.bSpotLight, bShadowingFromValidUVArea);
-	#endif
 
 			if (bShadowingFromValidUVArea)
 			{
@@ -86,13 +76,13 @@
 			}
 		}
 
-	#if VIRTUAL_SHADOW_MAP
-		if (VdbParams.VirtualShadowMapId != INDEX_NONE)
-		{
-			FVirtualShadowMapSampleResult VirtualShadowMapSample = SampleVirtualShadowMapTranslatedWorld(VdbParams.VirtualShadowMapId, TranslatedWorldPosition);
-			HardSurfaceShadowFactor *= VirtualShadowMapSample.ShadowFactor;
-		}
-	#endif // VIRTUALSHADOW_MAP
+		#if VIRTUAL_SHADOW_MAP
+			if (VdbParams.VirtualShadowMapId != INDEX_NONE)
+			{
+				FVirtualShadowMapSampleResult VirtualShadowMapSample = SampleVirtualShadowMapTranslatedWorld(VdbParams.VirtualShadowMapId, TranslatedWorldPosition);
+				HardSurfaceShadowFactor *= VirtualShadowMapSample.ShadowFactor;
+			}
+		#endif // VIRTUALSHADOW_MAP
 
 	#endif // HARD_SURFACE_SHADOWING
 
@@ -232,7 +222,7 @@ float3 GetInscattering(
 	}
 
 	HardSurfaceShadowFactor = ComputeHardSurfaceShadowFactor(TranslatedWorldPosition, LightData, LightType);
-#endif
+#endif // VDB_ENGINE_MODIFICATIONS
 	
 	Inscattering = LightData.Color * LightAttenuation * HardSurfaceShadowFactor;
 	if (any(Inscattering > 0.0) && bApplyShadowTransmittance)

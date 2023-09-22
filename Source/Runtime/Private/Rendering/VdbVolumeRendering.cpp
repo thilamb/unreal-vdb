@@ -97,12 +97,14 @@ void SetupRenderPassParameters(
 	else
 	{
 		SetVolumeShadowingDefaultShaderParameters(GraphBuilder, VdbParameters->VolumeShadowingShaderParameters);
+		VdbParameters->VolumeShadowingShaderParameters.TranslatedWorldPosition = DeferredLightUniform.LightParameters.TranslatedWorldPosition;
+		VdbParameters->VolumeShadowingShaderParameters.InvRadius = DeferredLightUniform.LightParameters.InvRadius;
 	}
 	PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
 
 	// Indirect lighting data
-	VdbParameters->LumenGIVolumeStruct = GetLumenTranslucencyLightingParameters(GraphBuilder, ViewInfo->LumenTranslucencyGIVolume, ViewInfo->LumenFrontLayerTranslucency);
-#endif
+	VdbParameters->LumenGIVolumeStruct = GetLumenTranslucencyLightingParameters(GraphBuilder, const_cast<FViewInfo*>(ViewInfo)->GetOwnLumenTranslucencyGIVolume(), ViewInfo->LumenFrontLayerTranslucency);
+#endif // VDB_ENGINE_MODIFICATIONS
 
 	// Pass params
 	PassParameters->View = ViewInfo->ViewUniformBuffer;
@@ -836,7 +838,7 @@ void FVdbVolumeRendering::RenderLight(
 					FTextureRHIRef CurveAtlasRHI = CurveAtlas ? CurveAtlas->GetTextureRHI() : nullptr;
 					if (CurveAtlasRHI)
 					{
-						ShaderElementData.BlackbodyColorSRV = TexCache.GetOrCreateSRV(CurveAtlasRHI, FRHITextureSRVCreateInfo());
+						ShaderElementData.BlackbodyColorSRV = TexCache.GetOrCreateSRV(RHICmdList, CurveAtlasRHI, FRHITextureSRVCreateInfo());
 					}
 					else
 					{

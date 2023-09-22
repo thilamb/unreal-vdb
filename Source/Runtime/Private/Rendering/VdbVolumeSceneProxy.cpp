@@ -171,9 +171,15 @@ FPrimitiveViewRelevance FVdbVolumeSceneProxy::GetViewRelevance(const FSceneView*
 	Result.bRenderInMainPass = ShouldRenderInMainPass();
 	Result.bUsesLightingChannels = GetLightingChannelMask() != GetDefaultLightingChannelMask();
 	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
-	Result.bTranslucentSelfShadow = bCastVolumetricTranslucentShadow;
-	MaterialRelevance.SetPrimitiveViewRelevance(Result);
-	Result.bVelocityRelevance = DrawsVelocity() && Result.bOpaque && Result.bRenderInMainPass;
+	
+	// Only if translucent volumetric self shadows are enabled can we setup translucent shadows thanks to fourier opacity maps
+	if (AllowTranslucencyPerObjectShadows(View->GetShaderPlatform()))
+	{
+		Result.bTranslucentSelfShadow = bCastVolumetricTranslucentShadow;
+		MaterialRelevance.SetPrimitiveViewRelevance(Result);
+		Result.bVelocityRelevance = DrawsVelocity() && Result.bOpaque && Result.bRenderInMainPass;
+	}
+
 	return Result;
 }
 

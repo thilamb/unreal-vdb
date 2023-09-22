@@ -19,14 +19,15 @@
 #include "/Engine/Generated/Material.ush"
 #include "/Engine/Generated/VertexFactory.ush"
 
+#define SUPPORT_CONTACT_SHADOWS 0
+
 #if VDB_ENGINE_MODIFICATIONS
 	#define DeferredLightUniforms VdbParams.DeferredLight
-	#define LumenGIVolumeStruct VdbParams.LumenGIVolumeStruct
 	#include "/Engine/Private/DeferredLightingCommon.ush"
 	#include "/Engine/Private/LightDataUniforms.ush"
 	#include "/Engine/Private/SHCommon.ush"
-	#define FrontLayerTranslucencyReflectionsStruct LumenGIVolumeStruct
-	#define RadianceCacheInterpolation LumenGIVolumeStruct
+	
+	#define LumenGIVolumeStruct VdbParams.LumenGIVolumeStruct
 	#include "/Engine/Private/Lumen/LumenTranslucencyVolumeShared.ush"
 #else
 	#include "/Engine/Private/LightData.ush"
@@ -298,7 +299,7 @@ float4 RaymarchFogVolume(
 
 			// Note: Phase is accounted for in spherical hamonic calculation
 			Radiance += StepTransmittance * Scattering * IndirectInscattering * AMBIENT;
-#endif // DIM_USE_LUMEN_GI
+	#endif // DIM_USE_LUMEN_GI
 		}
 
 #endif
