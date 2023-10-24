@@ -40,7 +40,7 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 
 	// Max number of ray bounces
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (ClampMin = "1", UIMin = "1"))
-	int32 MaxRayDepth = 300;
+	int32 MaxRayDepth = 1000;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (ClampMin = "1", UIMin = "1"))
 	int32 SamplesPerPixel = 1;
