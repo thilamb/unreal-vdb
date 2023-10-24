@@ -330,7 +330,7 @@ void MainPS(
 		LayerIndex,
 #endif
 		LastIntersection);
-	bool Valid = all(Transmittance < GetMaterialOpacityMaskClipValue());
+	bool Valid = all(Transmittance <= 1.0 - GetMaterialOpacityMaskClipValue());
 	
 	if (!Valid) discard;
 	
