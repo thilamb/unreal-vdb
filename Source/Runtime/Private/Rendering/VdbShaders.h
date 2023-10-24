@@ -275,9 +275,10 @@ typedef TVdbShaderPS<false, true, true, true, true>  FVdbShaderPS_FogVolume_Blac
 
 BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbDepthShaderParams, )
 	SHADER_PARAMETER(FMatrix44f, ShadowClipToTranslatedWorld)
+	SHADER_PARAMETER(FVector4f, ShadowSVPositionToClip)
 	SHADER_PARAMETER_ARRAY(FMatrix44f, CubeShadowClipToTranslatedWorld, [6])
 	SHADER_PARAMETER(FVector3f, ShadowPreViewTranslation)
-	END_GLOBAL_SHADER_PARAMETER_STRUCT()
+END_GLOBAL_SHADER_PARAMETER_STRUCT()
 
 BEGIN_SHADER_PARAMETER_STRUCT(FVdbShadowDepthPassParameters, )
 	SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)

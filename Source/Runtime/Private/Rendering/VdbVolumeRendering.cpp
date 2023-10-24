@@ -345,6 +345,24 @@ void FVdbVolumeRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters&
 	FRDGBuilder& GraphBuilder = *Parameters.GraphBuilder;
 	FVdbDepthShaderParams* VdbParameters = GraphBuilder.AllocParameters<FVdbDepthShaderParams>();
 	VdbParameters->ShadowClipToTranslatedWorld = Parameters.ProjectedShadowInfo->TranslatedWorldToClipOuterMatrix.Inverse();
+	VdbParameters->ShadowPreViewTranslation = FVector3f(Parameters.ProjectedShadowInfo->PreShadowTranslation);
+
+	{
+		auto& CachedParams = Parameters.ShadowDepthView->CachedViewUniformShaderParameters;
+
+		float Mx = 2.0f * CachedParams->ViewSizeAndInvSize.Z;
+		float My = -2.0f * CachedParams->ViewSizeAndInvSize.W;
+		float Ax = -1.0f - 2.0f * CachedParams->ViewRectMin.X * CachedParams->ViewSizeAndInvSize.Z;
+		float Ay = 1.0f + 2.0f * CachedParams->ViewRectMin.Y * CachedParams->ViewSizeAndInvSize.W;
+
+		FTranslationMatrix44f TranslationMat(FVector3f(Parameters.ProjectedShadowInfo->PreShadowTranslation - View->ViewMatrices.GetPreViewTranslation()));
+		FMatrix44f ProjectionMatrix = TranslationMat * Parameters.ProjectedShadowInfo->TranslatedWorldToClipOuterMatrix;		// LWC_TDOO: Precision loss?
+
+		VdbParameters->ShadowClipToTranslatedWorld = ProjectionMatrix.Inverse();
+		VdbParameters->ShadowSVPositionToClip = FVector4f(Mx, Ax, My, Ay);
+	}
+
+
 	if (!Parameters.ProjectedShadowInfo->OnePassShadowViewProjectionMatrices.IsEmpty())
 	{
 		for (int32 idx = 0; idx < 6; ++idx)
@@ -353,7 +371,6 @@ void FVdbVolumeRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters&
 			VdbParameters->CubeShadowClipToTranslatedWorld[idx] = FMatrix44f(ViewProjMat.Inverse());
 		}
 	}
-	VdbParameters->ShadowPreViewTranslation = FVector3f(Parameters.ProjectedShadowInfo->PreShadowTranslation);
 	TRDGUniformBufferRef<FVdbDepthShaderParams> VdbUniformBuffer = GraphBuilder.CreateUniformBuffer(VdbParameters);
 	
 	if (!OpaqueProxies.IsEmpty())

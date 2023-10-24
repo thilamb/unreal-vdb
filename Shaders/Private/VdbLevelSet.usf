@@ -215,7 +215,7 @@ float4 TraceOpaqueLevelSet(
 	// Trace single ray
 
 	float2 Jitter = float2(0.0, 0.0);
-	VdbRay iRay = PrepareRayFromPixel(VdbSampler.GridBuffer, VdbSampler.Grid, SvPosition.xy, ResolvedView.BufferSizeAndInvSize.xy, Jitter, 0.0, WorldToLocal); // index/vdb space
+	VdbRay iRay = PrepareRayFromPixel(VdbSampler.GridBuffer, VdbSampler.Grid, SvPosition.xy, ResolvedView.BufferSizeAndInvSize.xy, Jitter, FarDepthValue, WorldToLocal); // index/vdb space
 
 	ZeroCrossingHit HitResults;
 	if (!GetNextIntersection(VdbSampler, iRay, HitResults))

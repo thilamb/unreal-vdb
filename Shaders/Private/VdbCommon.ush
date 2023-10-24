@@ -254,21 +254,17 @@ float IndexToWorldDistance(float3 IndexVec, float4x4 LocalToWorld, pnanovdb_buf_
 	return length(WorldVec);
 }
 
-Segment getRayFromPixelCoord(uint2 ScreenPosition, uint2 ScreenDimensions, float2 Jitter, float DeviceZ)
+Segment getRayFromPixelCoord(uint2 ScreenPosition, float2 Jitter, float DeviceZ)
 {
-	float2 ScreenPositionNorm = (ScreenPosition + 0.5f + Jitter) / float2(ScreenDimensions);
-	float2 ClipPosition = (ScreenPositionNorm - View.ScreenPositionScaleBias.wz) / View.ScreenPositionScaleBias.xy;
-
 #if HAS_INVERTED_Z_BUFFER
 	DeviceZ = max(DeviceZ, 0.000000000000001); // either no Z value, or too far to even consider
 #endif
-	float4 Near = mul(float4(ClipPosition, 1, 1), View.ClipToTranslatedWorld); // near (world space)
-	float4 Far = mul(float4(ClipPosition, DeviceZ, 1), View.ClipToTranslatedWorld); // scene gbuffer (world space)
 
 	Segment Seg;
-	Seg.Start = Near.xyz / Near.w; // Translated World 
+	Seg.Start = SvPositionToTranslatedWorld(float4(ScreenPosition.xy, NearDepthValue, 1.0));
 	Seg.Start -= LWCHackToFloat(PrimaryView.PreViewTranslation); // World
-	Seg.End = Far.xyz / Far.w; // Translated World
+	
+	Seg.End = SvPositionToTranslatedWorld(float4(ScreenPosition.xy, DeviceZ, 1.0));
 	Seg.End -= LWCHackToFloat(PrimaryView.PreViewTranslation); // World
 	return Seg;
 }
@@ -276,7 +272,7 @@ Segment getRayFromPixelCoord(uint2 ScreenPosition, uint2 ScreenDimensions, float
 VdbRay PrepareRayFromPixel(pnanovdb_buf_t grid_buf, pnanovdb_grid_handle_t grid, uint2 ScreenPosition, uint2 ScreenDimension, float2 Jitter, float DeviceZ, float4x4 WorldToLocal)
 {
 	// World space
-	Segment Seg = getRayFromPixelCoord(ScreenPosition.xy, ScreenDimension.xy, Jitter, DeviceZ);
+	Segment Seg = getRayFromPixelCoord(ScreenPosition.xy, Jitter, DeviceZ);
 	
 	// Index space
 	float3 Origin = WorldToIndexPosition(Seg.Start, WorldToLocal, grid_buf, grid);

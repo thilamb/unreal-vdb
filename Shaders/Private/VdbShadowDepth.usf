@@ -231,13 +231,13 @@ void MainVS(
 	ResolvedView = ResolveView();
 
 	FVertexFactoryIntermediates VFIntermediates = GetVertexFactoryIntermediates(Input);
-	float4 WorldPos = VertexFactoryGetWorldPosition(Input, VFIntermediates);
+	float4 TranslatedWorldPos = VertexFactoryGetWorldPosition(Input, VFIntermediates);
 	float3x3 TangentToLocal = VertexFactoryGetTangentToLocal(Input, VFIntermediates);
-	FMaterialVertexParameters VertexParameters = GetMaterialVertexParameters(Input, VFIntermediates, WorldPos.xyz, TangentToLocal);
+	FMaterialVertexParameters VertexParameters = GetMaterialVertexParameters(Input, VFIntermediates, TranslatedWorldPos.xyz, TangentToLocal);
 	const float3 WorldNormal = VertexFactoryGetWorldNormal(Input, VFIntermediates);
 
 	#if ONEPASS_POINTLIGHT_SHADOW
-		OutPosition = WorldPos;
+		OutPosition = TranslatedWorldPos;
 
 		#if INTERPOLATE_VF_ATTRIBUTES
 			// Masked materials need texture coords to clip
@@ -245,19 +245,19 @@ void MainVS(
 		#endif
 
 		#if INTERPOLATE_POSITION
-			OutParameters.PixelPosition = WorldPos.xyz;
+			OutParameters.PixelPosition = TranslatedWorldPos.xyz;
 		#endif
 
 		LayerIndex = bUseGpuSceneInstancing ? VertexFactoryGetViewIndex(VFIntermediates) : LayerId;
-		OutPosition = mul(WorldPos, PassStruct.ShadowViewProjectionMatrices[LayerIndex]);
+		OutPosition = mul(TranslatedWorldPos, PassStruct.ShadowViewProjectionMatrices[LayerIndex]);
 	
 	#else
 		float Dummy;
 
 		SetShadowDepthOutputs(
-			PassStruct.ProjectionMatrix,
-			PassStruct.ViewMatrix,
-			WorldPos,
+			PassStruct.ProjectionMatrix, // TranslatedWorldToClipOuterMatrix, including preview translation to pre shadow
+			PassStruct.ViewMatrix, // Translated world to view
+			TranslatedWorldPos, // translated world
 			WorldNormal,
 			OutPosition,
 			#if !PERSPECTIVE_CORRECT_DEPTH
@@ -274,7 +274,7 @@ void MainVS(
 		#endif
 
 		#if INTERPOLATE_POSITION
-			OutParameters.PixelPosition = WorldPos.xyz;
+			OutParameters.PixelPosition = TranslatedWorldPos.xyz;
 		#endif
 
 		#if !PERSPECTIVE_CORRECT_DEPTH && !COMPILER_SUPPORTS_EMPTY_STRUCTS
@@ -295,7 +295,7 @@ void MainVS(
 
 			FPageInfo PageInfo = UnpackPageInfo(PackedPageInfo);
 
-			TransformToVirtualSmPage(OutPosition, OutVirtualSmPageClip, PageInfo, WorldPos.xyz);
+			TransformToVirtualSmPage(OutPosition, OutVirtualSmPageClip, PageInfo, TranslatedWorldPos.xyz);
 		}
 	#endif // VIRTUAL_SM_ENABLED
 }
@@ -334,9 +334,9 @@ void MainPS(
 	
 	if (!Valid) discard;
 	
-	float4 WorldPos = float4(LastIntersection.xyz, 1.0);
+	float4 TranslatedWorldPos = float4(LastIntersection.xyz, 1.0);
 	#if ONEPASS_POINTLIGHT_SHADOW
-		float4 ClipPos = mul(WorldPos, PassStruct.ShadowViewProjectionMatrices[LayerIndex]);
+		float4 ClipPos = mul(TranslatedWorldPos, PassStruct.ShadowViewProjectionMatrices[LayerIndex]);
 		OutDepth = ClipPos.z / ClipPos.w;
 	#else
 		float4 OutPosition;
@@ -344,9 +344,9 @@ void MainPS(
 		float OutDepthBias;
 	
 		SetShadowDepthOutputs(
-			PassStruct.ProjectionMatrix, // actually TranslatedWorldToClipOuterMatrix
-			PassStruct.ViewMatrix, // actually TranslatedWorldToView
-			WorldPos,
+			PassStruct.ProjectionMatrix, // TranslatedWorldToClipOuterMatrix, including preview translation to pre shadow
+			PassStruct.ViewMatrix, // Translated world to view
+			TranslatedWorldPos, // translated world
 			0.0,
 			OutPosition,
 			OutDepthZ

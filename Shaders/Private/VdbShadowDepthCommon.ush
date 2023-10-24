@@ -28,7 +28,7 @@ VdbRay PrepareShadowRayFromPixel(
 	float DeviceZ,
 	bool Forward)
 {
-	float4 ClipPosition = SvPositionToScreenPosition(SvPosition) / SvPosition.w; // NDC to Clip
+	float2 ClipPosition = VdbDepthParams.ShadowSVPositionToClip.xz * SvPosition.xy + VdbDepthParams.ShadowSVPositionToClip.yw; // NDC to clip
 
 	// Light space
 #if ONEPASS_POINTLIGHT_SHADOW
@@ -40,9 +40,9 @@ VdbRay PrepareShadowRayFromPixel(
 #endif
 
 	float3 Start = Near.xyz / Near.w;
-	Start -= LWCHackToFloat(VdbDepthParams.ShadowPreViewTranslation);
+	Start -= LWCHackToFloat(PrimaryView.PreViewTranslation); // World
 	float3 Stop = Far.xyz / Far.w;
-	Stop -= LWCHackToFloat(VdbDepthParams.ShadowPreViewTranslation);
+	Stop -= LWCHackToFloat(PrimaryView.PreViewTranslation); // World
 
 	// Index space
 	float3 Origin = WorldToIndexPosition(Start, WorldToLocal, grid_buf, grid);
@@ -103,7 +103,7 @@ float3 RaymarchFogVolume(
 		Transmittance = GetTransmittance(
 			Ray.Origin, Ray.Direction,
 			DensitySampler,
-			2.0 * SHADOW_STEP_SIZE_MULT,
+			SHADOW_STEP_SIZE_MULT,
 			LocalToWorld, ShadowThreshold, RandSequence, MinDistLocal, MaterialParameters);
 		iPos = pnanovdb_hdda_ray_start(Ray.Origin, MinDistLocal, Ray.Direction);
 	}
