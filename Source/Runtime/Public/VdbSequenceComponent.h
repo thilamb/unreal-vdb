@@ -78,30 +78,33 @@ class VOLUMERUNTIME_API UVdbSequenceComponent : public UActorComponent, public I
 private:
 
 	// Play Sequence / Animation in game. If not, let Sequencer control this animation.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true", EditCondition = "IsSequence"))
 	bool Autoplay = true;
 
 	// Is animation looping.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (EditCondition = "Autoplay", AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (EditCondition = "Autoplay && IsSequence", AllowPrivateAccess = "true"))
 	bool Looping = true;
 
 	// Speed at which the animation is playing
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (UIMin = 0.0001, ClampMin = 0.0001, EditCondition = "Autoplay", AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (UIMin = 0.0001, ClampMin = 0.0001, EditCondition = "Autoplay && IsSequence", AllowPrivateAccess = "true"))
 	float PlaybackSpeed = 1.0f;
 
 	// Duration of the sequence
-	UPROPERTY(VisibleAnywhere, transient, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, transient, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true", EditCondition = "IsSequence"))
 	float Duration = 0.f;
 
 	// Sequence start offset, in relative range [0, 1] where 0 represents the start and 1 the end of the sequence.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (DisplayName = "Offset", UIMin = 0.0, UIMax = 1.0, ClampMin = 0.0, ClampMax = 1.0, AllowPrivateAccess = "true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (DisplayName = "Offset", UIMin = 0.0, UIMax = 1.0, ClampMin = 0.0, ClampMax = 1.0, EditCondition = "IsSequence", AllowPrivateAccess = "true"))
 	float OffsetRelative = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true", EditCondition = "IsSequence"))
 	EVolumePlayMode CurrentPlayMode = EVolumePlayMode::Stopped;
 
-	UPROPERTY(BlueprintReadOnly, transient, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(BlueprintReadOnly, transient, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true", EditCondition = "IsSequence"))
 	float ElapsedTime = 0.f;
+
+	UPROPERTY(Transient)
+	bool IsSequence = false;
 
 private:
 
