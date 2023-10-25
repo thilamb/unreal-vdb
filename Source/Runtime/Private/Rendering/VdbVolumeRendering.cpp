@@ -68,7 +68,7 @@ void SetupRenderPassParameters(
 	VdbParameters->NumAccumulations = NumAccumulations;
 	VdbParameters->PrevAccumTex = PrevAccumuliationTex;
 
-	// Vdb data
+	// Global Vdb data
 	VdbParameters->Threshold = FMath::Max(0.0, FVdbCVars::CVarVolumetricVdbThreshold.GetValueOnAnyThread());
 
 	// Light data
@@ -308,6 +308,8 @@ void FVdbVolumeRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters&
 								ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0();
 								ShaderElementData.CustomFloatData1 = Proxy->GetCustomFloatData1();
 								ShaderElementData.CustomFloatData2 = Proxy->GetCustomFloatData2();
+								ShaderElementData.SliceMinData = Proxy->GetSliceMin();
+								ShaderElementData.SliceMaxData = Proxy->GetSliceMax();
 								ShaderElementData.DensityBufferSRV = Proxy->GetDensityRenderResource()->GetBufferSRV();
 								ShaderElementData.TemperatureBufferSRV = nullptr;
 								ShaderElementData.ColorBufferSRV = nullptr;
@@ -453,6 +455,8 @@ void FVdbVolumeRendering::TranslucentShadowDepth_RenderThread(FTranslucentShadow
 								ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0();
 								ShaderElementData.CustomFloatData1 = Proxy->GetCustomFloatData1();
 								ShaderElementData.CustomFloatData2 = Proxy->GetCustomFloatData2();
+								ShaderElementData.SliceMinData = Proxy->GetSliceMin();
+								ShaderElementData.SliceMaxData = Proxy->GetSliceMax();
 								ShaderElementData.DensityBufferSRV = Proxy->GetDensityRenderResource()->GetBufferSRV();
 								ShaderElementData.TemperatureBufferSRV = nullptr;
 								ShaderElementData.ColorBufferSRV = nullptr;
@@ -845,6 +849,8 @@ void FVdbVolumeRendering::RenderLight(
 					ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0();
 					ShaderElementData.CustomFloatData1 = Proxy->GetCustomFloatData1();
 					ShaderElementData.CustomFloatData2 = Proxy->GetCustomFloatData2();
+					ShaderElementData.SliceMinData = Proxy->GetSliceMin();
+					ShaderElementData.SliceMaxData = Proxy->GetSliceMax();
 					ShaderElementData.DensityBufferSRV = Proxy->IsTemperatureOnly() ? Proxy->GetTemperatureRenderResource()->GetBufferSRV() : Proxy->GetDensityRenderResource()->GetBufferSRV();
 					ShaderElementData.TemperatureBufferSRV = Proxy->GetTemperatureRenderResource() ? Proxy->GetTemperatureRenderResource()->GetBufferSRV() : nullptr;
 					ShaderElementData.ColorBufferSRV = Proxy->GetColorRenderResource() ? Proxy->GetColorRenderResource()->GetBufferSRV() : nullptr;

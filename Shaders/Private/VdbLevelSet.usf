@@ -23,6 +23,8 @@ int4 CustomIntData0;
 float4 CustomFloatData0;
 float4 CustomFloatData1;
 float4 CustomFloatData2;
+float4 SliceMinData;
+float4 SliceMaxData;
 StructuredBuffer<uint> DensityVdbBuffer;
 
 // I can't make a custom MaterialExpression from a plugin. 
@@ -61,7 +63,8 @@ float4 RaymarchLevelSet(
 	// ------------------------------------------------------------------------
 	// Test against volume, and update Ray start/end to fit volume
 
-	if (!CheckBounds(Ray, VdbSampler.MinBounds - VOLUME_PADDING, VdbSampler.MaxBounds + VOLUME_PADDING))
+	float3 Extents = VdbSampler.MaxBounds - VdbSampler.MinBounds;
+	if (!CheckBounds(Ray, SliceMinData.xyz * Extents + VdbSampler.MinBounds - VOLUME_PADDING, SliceMaxData.xyz * Extents + VdbSampler.MinBounds + VOLUME_PADDING))
 		return float4(0.0, 0.0, 0.0, 0.0);
 
 	// ------------------------------------------------------------------------

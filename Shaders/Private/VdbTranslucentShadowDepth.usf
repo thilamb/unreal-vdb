@@ -38,6 +38,8 @@ int4 CustomIntData1;
 float4 CustomFloatData0;
 float4 CustomFloatData1;
 float4 CustomFloatData2;
+float4 SliceMinData;
+float4 SliceMaxData;
 StructuredBuffer<uint> DensityVdbBuffer;
 StructuredBuffer<uint> TemperatureVdbBuffer;
 StructuredBuffer<uint> ColorVdbBuffer;

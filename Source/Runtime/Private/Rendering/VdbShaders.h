@@ -43,6 +43,8 @@ struct FVdbElementData : public FMeshMaterialShaderElementData
 	FVector4f CustomFloatData0; // x: Local step size, y: Shadow step size multiplier, z: voxel size, w: jittering
 	FVector4f CustomFloatData1; // x: anisotropy, y: albedo, z: blackbody intensity, w: blackbody temperature
 	FVector4f CustomFloatData2; // x: density mul, y: padding, z: ambient, w: unused
+	FVector4f SliceMinData; // xyz: slice data, w: unused
+	FVector4f SliceMaxData; // xyz: slice data, w: unused
 	FShaderResourceViewRHIRef DensityBufferSRV;
 	FShaderResourceViewRHIRef TemperatureBufferSRV;
 	FShaderResourceViewRHIRef ColorBufferSRV;
@@ -83,7 +85,7 @@ BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVdbShaderParams, )
 	// Scene data
 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthTexture)
 	SHADER_PARAMETER_SAMPLER(SamplerState, LinearTexSampler)
-	// Vdb data
+	// Global Vdb data
 	SHADER_PARAMETER(float, Threshold)
 	// Light data
 	SHADER_PARAMETER(int, bApplyEmissionAndTransmittance)
@@ -117,6 +119,8 @@ class FVdbShaderPS : public FMeshMaterialShader
 	LAYOUT_FIELD(FShaderParameter, CustomFloatData0);
 	LAYOUT_FIELD(FShaderParameter, CustomFloatData1);
 	LAYOUT_FIELD(FShaderParameter, CustomFloatData2);
+	LAYOUT_FIELD(FShaderParameter, SliceMinData);
+	LAYOUT_FIELD(FShaderParameter, SliceMaxData);
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		// Rant: I still don't really understand how these structs work. As far as I understand:
@@ -145,6 +149,8 @@ class FVdbShaderPS : public FMeshMaterialShader
 		CustomFloatData0.Bind(Initializer.ParameterMap, TEXT("CustomFloatData0"));
 		CustomFloatData1.Bind(Initializer.ParameterMap, TEXT("CustomFloatData1"));
 		CustomFloatData2.Bind(Initializer.ParameterMap, TEXT("CustomFloatData2"));
+		SliceMinData.Bind(Initializer.ParameterMap, TEXT("SliceMinData"));
+		SliceMaxData.Bind(Initializer.ParameterMap, TEXT("SliceMaxData"));
 
 		PassUniformBuffer.Bind(Initializer.ParameterMap, FVdbShaderParams::FTypeInfo::GetStructMetadata()->GetShaderVariableName());
 	}
@@ -201,6 +207,8 @@ public:
 		ShaderBindings.Add(CustomFloatData0, ShaderElementData.CustomFloatData0);
 		ShaderBindings.Add(CustomFloatData1, ShaderElementData.CustomFloatData1);
 		ShaderBindings.Add(CustomFloatData2, ShaderElementData.CustomFloatData2);
+		ShaderBindings.Add(SliceMinData, ShaderElementData.SliceMinData);
+		ShaderBindings.Add(SliceMaxData, ShaderElementData.SliceMaxData);
 	}
 };
 
@@ -411,6 +419,8 @@ class FVdbShadowDepthPS : public FMeshMaterialShader
 	LAYOUT_FIELD(FShaderParameter, CustomFloatData0);
 	LAYOUT_FIELD(FShaderParameter, CustomFloatData1);
 	LAYOUT_FIELD(FShaderParameter, CustomFloatData2);
+	LAYOUT_FIELD(FShaderParameter, SliceMinData);
+	LAYOUT_FIELD(FShaderParameter, SliceMaxData);
 
 	FVdbShadowDepthPS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
 		: FMeshMaterialShader(Initializer)
@@ -421,6 +431,8 @@ class FVdbShadowDepthPS : public FMeshMaterialShader
 		CustomFloatData0.Bind(Initializer.ParameterMap, TEXT("CustomFloatData0"));
 		CustomFloatData1.Bind(Initializer.ParameterMap, TEXT("CustomFloatData1"));
 		CustomFloatData2.Bind(Initializer.ParameterMap, TEXT("CustomFloatData2"));
+		SliceMinData.Bind(Initializer.ParameterMap, TEXT("SliceMinData"));
+		SliceMaxData.Bind(Initializer.ParameterMap, TEXT("SliceMaxData"));
 
 		PassUniformBuffer.Bind(Initializer.ParameterMap, FVdbShaderParams::FTypeInfo::GetStructMetadata()->GetShaderVariableName());
 	}
@@ -462,6 +474,8 @@ public:
 		ShaderBindings.Add(CustomFloatData0, ShaderElementData.CustomFloatData0);
 		ShaderBindings.Add(CustomFloatData1, ShaderElementData.CustomFloatData1);
 		ShaderBindings.Add(CustomFloatData2, ShaderElementData.CustomFloatData2);
+		ShaderBindings.Add(SliceMinData, ShaderElementData.SliceMinData);
+		ShaderBindings.Add(SliceMaxData, ShaderElementData.SliceMaxData);
 	}
 };
 

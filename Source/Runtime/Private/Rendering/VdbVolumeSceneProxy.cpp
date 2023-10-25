@@ -53,6 +53,11 @@ FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetCompon
 	IndexToLocal = PrimaryRenderInfos->GetIndexToLocal();
 	IndexToLocalDeterminantNegative = IndexToLocal.Determinant() < 0.0f;
 
+	SliceMinData = FVector4f(FMath::Max(0.0, InComponent->SliceMin.X), FMath::Max(0.0, InComponent->SliceMin.Y), FMath::Max(0.0, InComponent->SliceMin.Z));
+	SliceMinData = FVector4f(FMath::Min(1.0, SliceMinData.X), FMath::Min(1.0, SliceMinData.Y), FMath::Min(1.0, SliceMinData.Z));
+	SliceMaxData = FVector4f(FMath::Max(SliceMinData.X, InComponent->SliceMax.X), FMath::Max(SliceMinData.Y, InComponent->SliceMax.Y), FMath::Max(SliceMinData.Z, InComponent->SliceMax.Z));
+	SliceMaxData = FVector4f(FMath::Min(1.0, SliceMaxData.X), FMath::Min(1.0, SliceMaxData.Y), FMath::Min(1.0, SliceMaxData.Z));
+
 	CurveIndex = INDEX_NONE;
 	CurveAtlas = InComponent->BlackBodyCurveAtlas;
 	if (!InComponent->PhysicallyBasedBlackbody && InComponent->BlackBodyCurve && CurveAtlas)

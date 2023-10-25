@@ -130,6 +130,12 @@ class UVdbMaterialComponent : public UPrimitiveComponent
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|LevelSet")
 	bool TranslucentLevelSet = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Slices")
+	FVector SliceMin = FVector(0.0);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Slices")
+	FVector SliceMax = FVector(1.0);
+
 	//-------------------------------------------------------------------------
 
 	UFUNCTION(BlueprintCallable, Category = "Rendering|Components|Volume")

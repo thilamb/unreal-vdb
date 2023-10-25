@@ -110,7 +110,8 @@ float3 GetTransmittance(
 	Ray.TMax = POSITIVE_INFINITY;
 	FirstIntersection = POSITIVE_INFINITY;
 
-	if (!CheckBounds(Ray, Sampler.MinBounds - VOLUME_PADDING, Sampler.MaxBounds + VOLUME_PADDING))
+	float3 Extents = Sampler.MaxBounds - Sampler.MinBounds;
+	if (!CheckBounds(Ray, SliceMinData.xyz * Extents + Sampler.MinBounds - VOLUME_PADDING, SliceMaxData.xyz * Extents + Sampler.MinBounds + VOLUME_PADDING))
 		return 1.0f;
 
 	float RaymarchDistance = Ray.TMax - Ray.TMin;

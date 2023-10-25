@@ -36,6 +36,8 @@ public:
 	FVector4f GetCustomFloatData0() const { return CustomFloatData0; }
 	FVector4f GetCustomFloatData1() const { return CustomFloatData1; }
 	FVector4f GetCustomFloatData2() const { return CustomFloatData2; }
+	FVector4f GetSliceMin() const { return SliceMinData; }
+	FVector4f GetSliceMax() const { return SliceMaxData; }
 	const FMatrix44f& GetIndexToLocal() const { return IndexToLocal; }
 	class UMaterialInterface* GetMaterial() const { return Material; }
 	const FVdbRenderBuffer* GetDensityRenderResource() const { return DensityRenderBuffer; }
@@ -95,6 +97,8 @@ private:
 	FVector4f CustomFloatData0;
 	FVector4f CustomFloatData1;
 	FVector4f CustomFloatData2;
+	FVector4f SliceMinData;
+	FVector4f SliceMaxData;
 
 	int32 CurveIndex;
 	UCurveLinearColorAtlas* CurveAtlas;
