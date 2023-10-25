@@ -114,8 +114,11 @@ protected:
 	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Properties")
 	EQuantizationType Quantization = EQuantizationType::None;
 
-	bool IsVolSequence = false;
+	UPROPERTY()
 	bool IsVolVector = false;
+
+	UPROPERTY(Transient)
+	bool IsVolSequence = false;
 };
 
 
