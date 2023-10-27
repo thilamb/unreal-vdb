@@ -29,7 +29,7 @@ public:
 
 	UPROPERTY(config, EditAnywhere, Category = Compression,
 		meta = (DisplayName = "Quantization Type", ToolTip = "VDB float grids can be quantized (compressed). Not applicable with Vector Grids. Use this for lighter models in memory. Note that compressed models do not render necessarily faster."))
-	EQuantizationType Quantization;
+	EQuantizationType Quantization = EQuantizationType::None;
 
 	UPROPERTY(config, VisibleDefaultsOnly, Category = Sequence,
 		meta = (ToolTip = "True if file is part of a sequence in the same folder."))
@@ -38,6 +38,14 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = Sequence,
 		meta = (ToolTip = "Import as a sequence or as individual frame.", EditCondition = "IsSequence", EditConditionHides))
 	bool ImportAsSequence = false;
+
+	UPROPERTY(config, EditAnywhere, Category = Sequence,
+		meta = (ToolTip = "Sequence framerate.", EditCondition = "IsSequence", EditConditionHides))
+	ESequenceFramerate FrameRate = ESequenceFramerate::Fps24;
+
+	UPROPERTY(config, EditAnywhere, Category = Sequence,
+		meta = (ToolTip = "Sequence framerate.", EditCondition = "IsSequence && FrameRate == ESequenceFramerate::FpsCustom", EditConditionHides))
+	float CustomFrameRate = 23.98;
 
 	UPROPERTY(config, EditAnywhere, Category = Sequence,
 		meta = (ToolTip = "Index of first detected frame.", EditCondition = "IsSequence && ImportAsSequence", EditConditionHides))

@@ -42,6 +42,12 @@ void UVdbVolumeAsset::PostInitProperties()
 #endif
 }
 
+void UVdbVolumeAsset::PostLoad()
+{
+	Super::PostLoad();
+	IsSequence = VdbVolumes.IsEmpty() ? false : VdbVolumes[0]->IsSequence();
+}
+
 #if WITH_EDITORONLY_DATA
 void UVdbVolumeAsset::GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) const
 {

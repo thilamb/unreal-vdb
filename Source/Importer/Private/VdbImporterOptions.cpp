@@ -16,6 +16,5 @@
 
 UVdbImporterOptions::UVdbImporterOptions(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
-	, Quantization(EQuantizationType::None)
 {
 }

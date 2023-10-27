@@ -91,7 +91,7 @@ public:
 	virtual const FVolumeRenderInfos* GetRenderInfos(uint32 FrameIndex) const override { return &VolumeRenderInfos[FrameIndex]; }
 	bool IsGridDataInMemory(uint32 FrameIndex, bool CheckIsAlsoUploadedToGPU) const;
 
-	float GetTimeBetweenFramesInSeconds() const { return 0.0333333333333333333f; }
+	float GetTimeBetweenFramesInSeconds() const { return 1.0 / GetFrameRate(); }
 	float GetDurationInSeconds() const { return GetTimeBetweenFramesInSeconds() * float(FMath::Max(uint32(1), GetNbFrames()) - 1); }
 	uint32 GetFrameIndexFromTime(float InputAnimTime) const;
 	float GetFrameIndexFloatFromTime(float InputAnimTime) const;
@@ -103,8 +103,8 @@ public:
 
 #if WITH_EDITOR
 	void PrepareRendering();
-	void AddFrame(nanovdb::GridHandle<>& NanoGridHandle, EQuantizationType InQuantization, FVdbGridInfoPtr FrameGridInfo);
-	void FinalizeImport(const FString& Filename);
+	void AddFrame(nanovdb::GridHandle<>& NanoGridHandle, FVdbGridInfoPtr FrameGridInfo);
+	void FinalizeImport(EQuantizationType Compression);
 
 	// VolumeSequences are never loaded and unavailable unless we stream frames in. This forces streaming a specific frame.
 	virtual void ForceStreaming(uint32 FrameIndex) override;
@@ -131,7 +131,7 @@ private:
 	UPROPERTY()
 	uint64 FrameMaxMemoryUsage = 0;
 
-	UPROPERTY(VisibleAnywhere, Category = "Properties")
+	UPROPERTY(VisibleAnywhere, Category = "Sequence")
 	TArray<FVolumeFrameInfos> VolumeFramesInfos;
 
 	TArray<FVolumeRenderInfos> VolumeRenderInfos;

@@ -49,14 +49,15 @@ void UActorFactoryVdbVolume::PostSpawnActor(UObject* Asset, AActor* NewActor)
 	Super::PostSpawnActor(Asset, NewActor);
 
 	UVdbVolumeAsset* VdbAsset = CastChecked<UVdbVolumeAsset>(Asset);
-
-	// Change properties
 	AVdbVolumeActor* VdbActor = CastChecked<AVdbVolumeActor>(NewActor);
 
-	UVdbAssetComponent* VdbMaterialComponent = VdbActor->GetVdbAssetComponent();
-	VdbMaterialComponent->UnregisterComponent();
-	VdbMaterialComponent->VdbAsset = VdbAsset;
-	VdbMaterialComponent->RegisterComponent();
+	// Assign asset to newly created actor
+	UVdbAssetComponent* VdbAssetComponent = VdbActor->GetVdbAssetComponent();
+	VdbAssetComponent->VdbAsset = VdbAsset;
+
+	// Force refresh
+	VdbActor->UnregisterAllComponents();
+	VdbActor->RegisterAllComponents();
 }
 
 void UActorFactoryVdbVolume::PostCreateBlueprint(UObject* Asset, AActor* CDO)
@@ -65,7 +66,7 @@ void UActorFactoryVdbVolume::PostCreateBlueprint(UObject* Asset, AActor* CDO)
 	{
 		UVdbVolumeAsset* VdbAsset = CastChecked<UVdbVolumeAsset>(Asset);
 		AVdbVolumeActor* VdbActor = CastChecked<AVdbVolumeActor>(CDO);
-		UVdbAssetComponent* VdbMaterialComponent = VdbActor->GetVdbAssetComponent();
-		VdbMaterialComponent->VdbAsset = VdbAsset;
+		UVdbAssetComponent* VdbAssetComponent = VdbActor->GetVdbAssetComponent();
+		VdbAssetComponent->VdbAsset = VdbAsset;
 	}
 }

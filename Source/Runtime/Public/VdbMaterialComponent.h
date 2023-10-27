@@ -23,7 +23,7 @@
 class UVdbAssetComponent;
 
 UCLASS(Blueprintable, ClassGroup = Rendering, HideCategories = (Activation, Input, Physics, Materials, Collision, Input, LOD, HLOD, Mobile, Navigation, VirtualTexture))
-class UVdbMaterialComponent : public UPrimitiveComponent
+class VOLUMERUNTIME_API UVdbMaterialComponent : public UPrimitiveComponent
 {
 	GENERATED_UCLASS_BODY()
 

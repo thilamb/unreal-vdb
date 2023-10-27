@@ -27,7 +27,7 @@ class UVdbVolumeAsset;
 
 // Can contain several grids of the same OpenVDB/NanoVDB file
 UCLASS(Blueprintable, ClassGroup = Rendering, HideCategories = (Activation, Collision, Cooking, HLOD, Navigation, VirtualTexture), meta = (BlueprintSpawnableComponent))
-class UVdbAssetComponent : public UActorComponent
+class VOLUMERUNTIME_API UVdbAssetComponent : public UActorComponent
 {
 	GENERATED_UCLASS_BODY()
 

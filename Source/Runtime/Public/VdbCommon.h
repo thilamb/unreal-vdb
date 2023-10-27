@@ -86,6 +86,18 @@ enum class EQuantizationType : uint8
 	FpN,
 };
 
+// Sequence number of frames per second
+UENUM(BlueprintType)
+enum class ESequenceFramerate : uint8
+{
+	Fps24		UMETA(DisplayName = "24 fps"),
+	Fps25		UMETA(DisplayName = "25 fps"),
+	Fps30		UMETA(DisplayName = "30 fps"),
+	Fps60		UMETA(DisplayName = "60 fps"),
+	// Custom user defined framerate
+	FpsCustom	UMETA(DisplayName = "Custom fps"),
+};
+
 UENUM()
 enum class EVdbClass : uint8
 {

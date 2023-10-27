@@ -23,6 +23,7 @@
 
 class FVdbRenderBuffer;
 class FVolumeRenderInfos;
+class UVdbVolumeAsset;
 
 // Base interface for NanoVDB file containers
 UCLASS(BlueprintType, hidecategories = (Object))
@@ -50,6 +51,7 @@ public:
 	float GetVoxelSize() const { return VoxelSize.X; }
 	int GetMemorySize() const { return MemoryUsage; }
 	FString GetType() const;
+	float GetFrameRate() const;
 
 	void UpdateFromMetadata(const nanovdb::GridMetaData* MetaData);
 
@@ -69,6 +71,8 @@ public:
 
 	// UObject Interface.
 	virtual void PostInitProperties() override;
+
+	UVdbVolumeAsset* GetParentAsset() { return ParentAsset; }
 
 #if WITH_EDITORONLY_DATA
 	FString GetGridName() const { return GridName; }
@@ -92,26 +96,26 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Properties", Meta = (DisplayName = "Total Memory"))
 	FString MemoryUsageStr;
 
-	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Properties")
+	UPROPERTY(VisibleAnywhere, Category = "Details")
 	float MinValue;
 
-	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Properties")
+	UPROPERTY(VisibleAnywhere, Category = "Details")
 	float MaxValue;
 #endif
 
-	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Properties")
+	UPROPERTY(VisibleAnywhere, Category = "Details")
 	FBox Bounds;
 
-	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Properties")
+	UPROPERTY(VisibleAnywhere, Category = "Details")
 	FIntVector LargestVolume;
 
-	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Properties")
+	UPROPERTY(VisibleAnywhere, Category = "Details")
 	FVector3f VoxelSize;
 
 	UPROPERTY()
 	uint64 MemoryUsage = 0;
 
-	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Properties")
+	UPROPERTY(VisibleAnywhere, Category = "Properties")
 	EQuantizationType Quantization = EQuantizationType::None;
 
 	UPROPERTY()
@@ -119,6 +123,8 @@ protected:
 
 	UPROPERTY(Transient)
 	bool IsVolSequence = false;
+
+	UVdbVolumeAsset* ParentAsset = nullptr;
 };
 
 

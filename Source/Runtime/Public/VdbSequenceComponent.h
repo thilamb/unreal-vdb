@@ -71,29 +71,37 @@ class VOLUMERUNTIME_API UVdbSequenceComponent : public UActorComponent, public I
 	void SetManualTick(bool InManualTick);
 	void OnChunkAvailable(uint32 ChunkId);
 
-
 	const class UVdbVolumeSequence* GetPrincipalSequence() const;
 	TObjectPtr<class UVdbVolumeBase> GetPrimarySequence() const;
 
 private:
 
-	// Play Sequence / Animation in game. If not, let Sequencer control this animation.
+	// Play Sequence / Animation in game.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true", EditCondition = "IsSequence"))
 	bool Autoplay = true;
 
-	// Is animation looping.
+	// Is animation looping in game.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (EditCondition = "Autoplay && IsSequence", AllowPrivateAccess = "true"))
 	bool Looping = true;
 
-	// Speed at which the animation is playing
+	// Frame Rate of currently assigned VDB volume (read-only). Only valid if VDB is a sequence / animation. 
+	// Change Frame Rate on the asset if needed (right click on asset and change frame rate, or re-import data and change import options).
+	UPROPERTY(VisibleAnywhere, Transient, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true", EditCondition = "IsSequence"))
+	float FrameRate = 30.f;
+
+	// Use this option to change in game playback speed while keeping the original frame rate of the VDB sequence. 
+	// This will impact Duration.
+	// This option will not be used in the sequencer, use sequencer track Play Rate multiplier instead.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (UIMin = 0.0001, ClampMin = 0.0001, EditCondition = "Autoplay && IsSequence", AllowPrivateAccess = "true"))
 	float PlaybackSpeed = 1.0f;
 
-	// Duration of the sequence
-	UPROPERTY(VisibleAnywhere, transient, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true", EditCondition = "IsSequence"))
+	// Duration of the in game sequence, in seconds. Read-only
+	UPROPERTY(VisibleAnywhere, Transient, Category = "Volume|Playback", meta = (AllowPrivateAccess = "true", EditCondition = "IsSequence"))
 	float Duration = 0.f;
 
-	// Sequence start offset, in relative range [0, 1] where 0 represents the start and 1 the end of the sequence.
+	// Sequence start offset, in relative range [0 (start), 1 (end)]. 
+	// This is useful to debug sequences in the editor. 
+	// It is also useful when you have multiple instances of the same VDB in game and you don't want them to all look the same at the same time.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Playback", meta = (DisplayName = "Offset", UIMin = 0.0, UIMax = 1.0, ClampMin = 0.0, ClampMax = 1.0, EditCondition = "IsSequence", AllowPrivateAccess = "true"))
 	float OffsetRelative = 0;
 

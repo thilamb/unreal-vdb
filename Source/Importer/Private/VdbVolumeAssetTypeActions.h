@@ -38,10 +38,13 @@ public:
 
 private:
 
-	void MakeVdbAssetSubMenu(UToolMenu* Menu, TArray<UObject*> InObjects);
+	void ToVolumeSubMenu(UToolMenu* Menu, TArray<TWeakObjectPtr<UVdbVolumeAsset>> VdbVolumes);
 	void ExecuteConvertToVolume(UVdbVolumeBase* VdbVolume, bool IsSequence);
+	void FrameRateSubMenu(UToolMenu* Menu, TArray<TWeakObjectPtr<UVdbVolumeAsset>> VdbVolumes);
+	void ExecuteChangeFrameRate(TArray<TWeakObjectPtr<UVdbVolumeAsset>> VdbVolumes);
 
 	EAssetTypeCategories::Type MyAssetCategory;
 
 	uint32 CurrentFrame = 0;
+	float ModifiedFrameRate = 30.0;
 };

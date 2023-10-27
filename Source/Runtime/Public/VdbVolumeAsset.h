@@ -33,18 +33,27 @@ public:
 
 	UVdbVolumeBase* GetVdbVolume(int32 Index);
 
+	UPROPERTY(VisibleAnywhere, Category = VdbGrids)
+	TArray<UVdbVolumeBase*> VdbVolumes;
+
+	UPROPERTY(VisibleAnywhere ,Transient, Category = "Sequence")
+	bool IsSequence = false;
+
+	UPROPERTY(VisibleAnywhere, Category = "Sequence", meta=(EditCondition = "IsSequence", EditConditionHides))
+	float FrameRate = 30.0;
+
+	float GetFrameRate() const { return FrameRate; }
+	void ChangeFrameRate(float Fps) { FrameRate = Fps; }
+
+	// UObject Interface.
 	virtual void PostInitProperties() override;
+	virtual void PostLoad() override;
 
 #if WITH_EDITORONLY_DATA
 	virtual void GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) const override;
 
 	class UAssetImportData* GetAssetImportData() { return AssetImportData; }
-#endif
 
-	UPROPERTY(VisibleAnywhere, Category = VdbGrids)
-	TArray<UVdbVolumeBase*> VdbVolumes;
-
-#if WITH_EDITORONLY_DATA
 	UPROPERTY(BlueprintReadOnly, Instanced, Category = ImportSettings)
 	TObjectPtr<class UAssetImportData> AssetImportData;
 #endif

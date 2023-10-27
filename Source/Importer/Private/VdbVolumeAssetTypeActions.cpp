@@ -14,6 +14,7 @@
 
 #include "VdbVolumeAssetTypeActions.h"
 #include "VdbVolumeAsset.h"
+#include "VdbAssetComponent.h"
 #include "VdbVolumeBase.h"
 #include "VdbToVolumeTextureFactory.h"
 
@@ -68,21 +69,32 @@ void FVdbVolumeAssetTypeActions::GetResolvedSourceFilePaths(const TArray<UObject
 
 void FVdbVolumeAssetTypeActions::GetActions(const TArray<UObject*>& InObjects, FToolMenuSection& Section)
 {
+	auto VdbVolumes = GetTypedWeakObjectPtrs<UVdbVolumeAsset>(InObjects);
+
 	Section.AddSubMenu(
 		"VdbVolume_CreateVolumeTexture",
 		LOCTEXT("VdbVolume_CreateVolumeTexture", "Create Volume Texture"),
 		LOCTEXT("VdbVolume_CreateVolumeTextureTooltip", "Creates a Volume texture and copies content from Vdb Volume."),
-		FNewToolMenuDelegate::CreateSP(this, &FVdbVolumeAssetTypeActions::MakeVdbAssetSubMenu, InObjects),
+		FNewToolMenuDelegate::CreateSP(this, &FVdbVolumeAssetTypeActions::ToVolumeSubMenu, VdbVolumes),
 		FUIAction(),
 		EUserInterfaceActionType::Button,
 		false,
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "ClassIcon.Texture2D")
 	);
+	Section.AddSubMenu(
+		"VdbVolume_ChangeFrameRate",
+		LOCTEXT("VdbVolume_ChangeFrameRate", "Change Frame Rate"),
+		LOCTEXT("VdbVolume_ChangeFrameRateTooltip", "Modifies the number of sequence frames per seconds."),
+		FNewToolMenuDelegate::CreateSP(this, &FVdbVolumeAssetTypeActions::FrameRateSubMenu, VdbVolumes),
+		FUIAction(),
+		EUserInterfaceActionType::Button,
+		false,
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "ClassIcon.MediaProfile") // MediaProfile
+	);
 }
 
-void FVdbVolumeAssetTypeActions::MakeVdbAssetSubMenu(UToolMenu* Menu, TArray<UObject*> InObjects)
+void FVdbVolumeAssetTypeActions::ToVolumeSubMenu(UToolMenu* Menu, TArray<TWeakObjectPtr<UVdbVolumeAsset>> VdbVolumes)
 {
-	auto VdbVolumes = GetTypedWeakObjectPtrs<UVdbVolumeAsset>(InObjects);
 	if (VdbVolumes.Num() == 1)
 	{
 		FToolMenuSection& Section = Menu->AddSection("Vdb Grids", LOCTEXT("VdbGridsList", "Vdb Grids"));
@@ -168,6 +180,61 @@ void FVdbVolumeAssetTypeActions::ExecuteConvertToVolume(UVdbVolumeBase* VdbVolum
 	Factory->FrameIndex = CurrentFrame;
 	FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
 	ContentBrowserModule.Get().CreateNewAsset(Name, FPackageName::GetLongPackagePath(PackagePath), UVolumeTexture::StaticClass(), Factory);
+}
+
+void FVdbVolumeAssetTypeActions::FrameRateSubMenu(UToolMenu* Menu, TArray<TWeakObjectPtr<UVdbVolumeAsset>> VdbVolumes)
+{
+	TSharedRef<SWidget> MasterWidget = 
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot()
+		[
+			SNew(SBox)
+				.WidthOverride(100)
+				[
+					SNew(SNumericEntryBox<float>)
+						.Font(FAppStyle::GetFontStyle(TEXT("MenuItem.Font")))
+						.AllowSpin(true)
+						.MinDesiredValueWidth(100)
+						.MinValue(1)
+						.MinSliderValue(12)
+						.MaxSliderValue(60)
+						.MaxValue(240)
+						.OnValueChanged_Lambda([this](float NewValue)
+							{
+								ModifiedFrameRate = NewValue;
+							})
+						.Value_Lambda([this]()
+							{
+								return ModifiedFrameRate;
+							})
+				]
+		]
+		+ SHorizontalBox::Slot()
+		[
+			SNew(SButton)
+				.ButtonStyle(FAppStyle::Get(), "Button")
+				.TextStyle(FAppStyle::Get(), "DialogButtonText")
+				.HAlign(HAlign_Center)
+				.VAlign(VAlign_Center)
+				.Text(LOCTEXT("ApplyButtonLabel", "Apply"))
+				.OnClicked_Lambda([this, VdbVolumes]()
+					{
+						ExecuteChangeFrameRate(VdbVolumes);
+						return FReply::Handled();
+					})
+		];
+
+	FToolMenuSection& Section = Menu->AddSection("Change Frame Rate", LOCTEXT("ChangeFrameRate", "Change Frame Rate"));
+	Menu->AddMenuEntry("New Frame Rate:", FToolMenuEntry::InitWidget("FrameRate", MasterWidget, FText::FromString("Value"), true));
+}
+
+void FVdbVolumeAssetTypeActions::ExecuteChangeFrameRate(TArray<TWeakObjectPtr<UVdbVolumeAsset>> VdbVolumes)
+{
+	for (auto VdbVolume : VdbVolumes)
+	{
+		VdbVolume->ChangeFrameRate(ModifiedFrameRate);
+		VdbVolume->MarkPackageDirty();
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

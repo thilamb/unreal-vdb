@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "VdbVolumeBase.h"
+#include "VdbVolumeAsset.h"
 
 #include "UnrealClient.h"
 #include "UObject/MetaData.h"
@@ -22,6 +23,7 @@ FBox UVdbVolumeBase::ZeroBox = FBox(ForceInitToZero);
 UVdbVolumeBase::UVdbVolumeBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	ParentAsset = Cast<UVdbVolumeAsset>(GetOuter());
 }
 
 void UVdbVolumeBase::PostInitProperties()
@@ -72,5 +74,9 @@ FString UVdbVolumeBase::GetType() const
 #else
 	return "";
 #endif
+}
 
+float UVdbVolumeBase::GetFrameRate() const
+{
+	return (ParentAsset != nullptr) ? ParentAsset->GetFrameRate() : 30.f;
 }

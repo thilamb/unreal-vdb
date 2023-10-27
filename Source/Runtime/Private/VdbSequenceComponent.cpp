@@ -61,7 +61,6 @@ UVdbSequenceComponent::~UVdbSequenceComponent() {}
 void UVdbSequenceComponent::SetVdbAssets(UVdbAssetComponent* Component)
 {
 	VdbAssets = Component;
-	IsSequence = GetPrimarySequence() != nullptr;
 }
 
 TObjectPtr<UVdbVolumeBase> UVdbSequenceComponent::GetPrimarySequence() const
@@ -126,11 +125,13 @@ void UVdbSequenceComponent::OnRegister()
 	{
 		IsSequence = true;
 		Duration = VdbSequence->GetDurationInSeconds() / PlaybackSpeed;
+		FrameRate = VdbSequence->GetFrameRate();
 	}
 	else
 	{
 		IsSequence = false;
 		Duration = 0.f;
+		FrameRate = 30.0;
 	}
 
 	if (VdbAssets)

@@ -124,6 +124,18 @@ nanovdb::GridType ToGridType(EQuantizationType Type)
 	}
 }
 
+float GetSeqFrameRate(ESequenceFramerate FrameRate, float CustomFrameRate)
+{
+	switch (FrameRate)
+	{
+	case ESequenceFramerate::Fps24: return 24.0;
+	case ESequenceFramerate::Fps25: return 25.0;
+	case ESequenceFramerate::Fps30: return 30.0;
+	case ESequenceFramerate::Fps60: return 60.0;
+	default: return CustomFrameRate;
+	}
+}
+
 UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, const FString& Filename,
 	const TCHAR* Parms, FFeedbackContext* Warn, bool& bOutOperationCanceled)
 {
@@ -176,6 +188,8 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 			{
 				ImporterOptions->Quantization = Options->Quantization;
 				ImporterOptions->ImportAsSequence = Options->ImportAsSequence;
+				ImporterOptions->FrameRate = Options->FrameRate;
+				ImporterOptions->CustomFrameRate = Options->CustomFrameRate;
 			}
 		}
 	}
@@ -240,7 +254,7 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 							if (gridHandle)
 							{
 								// Setup per frame infos that will always be loaded with the sequence
-								VolumeSequence->AddFrame(gridHandle, ImporterOptions->Quantization, *FrameGridInfo);
+								VolumeSequence->AddFrame(gridHandle, *FrameGridInfo);
 
 								// Setup stream data
 								nanovdb::GridHandle<nanovdb::HostBuffer> NanoGridHandle = MoveTemp(gridHandle);
@@ -274,8 +288,12 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 
 					if (!bCancelGridImport)
 					{
-						VolumeSequence->FinalizeImport(Filename);
+						VolumeSequence->FinalizeImport(ImporterOptions->Quantization);
 						ResultAssets.Add(VolumeSequence);
+
+						const float FrameRate = GetSeqFrameRate(ImporterOptions->FrameRate, ImporterOptions->CustomFrameRate);
+						VdbAsset->FrameRate = FrameRate;
+						VdbAsset->IsSequence = true;
 						VdbAsset->GetAssetImportData()->Update(Filename);
 						VdbAsset->VdbVolumes.Add(VolumeSequence);
 					}
@@ -297,10 +315,11 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 						FName NewName(GridInfo->GridName.ToString());
 						UVdbVolumeStatic* VolumeStatic = NewObject<UVdbVolumeStatic>(VdbAsset, UVdbVolumeStatic::StaticClass(), NewName, Flags);
 						VolumeStatic->Import(MoveTemp(gridHandle), ImporterOptions->Quantization, GridInfo);
-						VdbAsset->GetAssetImportData()->Update(Filename);
-						VdbAsset->VdbVolumes.Add(VolumeStatic);
-
 						ResultAssets.Add(VolumeStatic);
+
+						VdbAsset->GetAssetImportData()->Update(Filename);
+						VdbAsset->IsSequence = false;
+						VdbAsset->VdbVolumes.Add(VolumeStatic);
 					}
 				}
 			}
