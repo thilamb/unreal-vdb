@@ -108,7 +108,7 @@ void UVdbSequenceComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void UVdbSequenceComponent::SetElapsedTimeToStartTime()
 {
 	const UVdbVolumeSequence* VdbSequence = GetPrincipalSequence();
-	if (VdbSequence)
+	if (VdbSequence && !ManualTick)
 	{
 		ElapsedTime = FMath::Clamp(OffsetRelative, 0.f, 1.0f) * VdbSequence->GetDurationInSeconds();
 	}
