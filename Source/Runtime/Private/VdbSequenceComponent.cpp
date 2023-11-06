@@ -112,6 +112,8 @@ void UVdbSequenceComponent::SetElapsedTimeToStartTime()
 	{
 		ElapsedTime = FMath::Clamp(OffsetRelative, 0.f, 1.0f) * VdbSequence->GetDurationInSeconds();
 	}
+
+	TickSubFrame();
 }
 
 void UVdbSequenceComponent::OnRegister()
@@ -235,6 +237,8 @@ void UVdbSequenceComponent::TickComponent(float DeltaTime, enum ELevelTick TickT
 			ElapsedTime = VdbSequence->GetDurationInSeconds();
 		}
 	}
+
+	TickSubFrame();
 }
 
 void UVdbSequenceComponent::SetManualTick(bool InManualTick)
@@ -329,6 +333,8 @@ void UVdbSequenceComponent::UpdateIndicesOfChunksToStream(TArray<uint32>& Indice
 
 	if(bUpdateAsset)
 	{
+		TickSubFrame();
+
 		VdbAssets->BroadcastFrameChanged(FrameIndexToStream, false);
 		IndexOfLastDisplayedFrame = FrameIndexToStream;
 	}
@@ -433,6 +439,18 @@ void UVdbSequenceComponent::OnChunkAvailable(uint32 ChunkId)
 			VdbAssets->BroadcastFrameChanged(FrameIndex, true);
 			IndexOfLastDisplayedFrame = FrameIndex;
 		}
+	}
+}
+
+// Subframe for motion blur and inter frame interpolation
+void UVdbSequenceComponent::TickSubFrame()
+{
+	if (const UVdbVolumeSequence* VdbSequence = GetPrincipalSequence())
+	{
+		// Subframe for motion blur and inter frame interpolation
+		float FrameFloat = VdbSequence->GetFrameIndexFloatFromTime(ElapsedTime);
+		float SubFrame = FMath::Frac(FrameFloat);
+		VdbAssets->BroadcastSubFrameChanged(SubFrame);
 	}
 }
 

@@ -49,9 +49,11 @@ private:
 
 	FText GetCurrentDensityGridName() const;
 	FText GetCurrentTemperatureGridName() const;
+	FText GetCurrentVelocityGridName() const;
 	FText GetCurrentColorGridName() const;
 	void OnDensityGridSelected(TSharedPtr<FString> SpecifierName, ESelectInfo::Type SelectInfo);
 	void OnTemperatureGridSelected(TSharedPtr<FString> SpecifierName, ESelectInfo::Type SelectInfo);
+	void OnVelocityGridSelected(TSharedPtr<FString> SpecifierName, ESelectInfo::Type SelectInfo);
 	void OnColorGridSelected(TSharedPtr<FString> SpecifierName, ESelectInfo::Type SelectInfo);
 
 	UVdbAssetComponent* CurrentComponent = nullptr;

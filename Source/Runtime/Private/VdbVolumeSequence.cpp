@@ -58,14 +58,14 @@ UVdbVolumeSequence::~UVdbVolumeSequence() = default;
 float UVdbVolumeSequence::GetFrameIndexFloatFromTime(float InputAnimTime) const
 {
 	const float AnimationTime = FMath::Min(InputAnimTime, GetDurationInSeconds());
-	const float FrameIndexFloat = AnimationTime / GetTimeBetweenFramesInSeconds();
+	const float FrameIndexFloat = AnimationTime / GetTimeBetweenFramesInSeconds() + UE_KINDA_SMALL_NUMBER;
 	return FrameIndexFloat;
 }
 
 uint32 UVdbVolumeSequence::GetFrameIndexFromTime(float InputAnimTime) const
 {
 	const float FrameIndexFloat = GetFrameIndexFloatFromTime(InputAnimTime);
-	const uint32 FrameIndexU32 = uint32(FMath::RoundToInt32(FrameIndexFloat));
+	const uint32 FrameIndexU32 = uint32(FMath::FloorToInt32(FrameIndexFloat));
 	return FrameIndexU32;
 }
 

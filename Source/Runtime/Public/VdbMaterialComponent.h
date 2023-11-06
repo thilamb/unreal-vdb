@@ -83,6 +83,10 @@ class VOLUMERUNTIME_API UVdbMaterialComponent : public UPrimitiveComponent
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
 	bool RenderAfterTransparents = false;
 
+	// Velocity multiplier
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
+	float VelocityMultiplier = 1.0;
+
 	// Density multiplier of the volume, modulating VdbPrincipal values 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (ClampMin = "0.0", UIMin = "0.0"))
 	float DensityMultiplier = 100.0;
@@ -184,6 +188,7 @@ public:
 	//~ End UPrimitiveComponent Interface.
 
 	void UpdateSceneProxy(uint32 FrameIndex);
+	void UpdateSubFrame(float Value);
 
 	UFUNCTION(BlueprintCallable, meta = (DisplayName = "Set VdbAssetComponent"), Category = Volume)
 	void SetVdbAssets(UVdbAssetComponent* Comp);

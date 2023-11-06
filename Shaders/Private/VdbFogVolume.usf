@@ -43,6 +43,7 @@ float4 SliceMinData;
 float4 SliceMaxData;
 StructuredBuffer<uint>	DensityVdbBuffer;
 StructuredBuffer<uint>	TemperatureVdbBuffer;
+StructuredBuffer<uint>	VelocityVdbBuffer;
 StructuredBuffer<uint>	ColorVdbBuffer;
 Texture2D				BlackbodyColor; // curve atlas
 
@@ -68,6 +69,8 @@ Texture2D				BlackbodyColor; // curve atlas
 #define DENSITY_MULT CustomFloatData2.x
 #define VOLUME_PADDING CustomFloatData2.y
 #define AMBIENT CustomFloatData2.z
+#define VELOCITY_MULT CustomFloatData2.w
+#define SUB_FRAME SliceMinData.w
 
 #define SAMPLING_FLOAT ReadValue
 #define SAMPLING_VECTOR ReadValueVec3f
@@ -93,6 +96,9 @@ float4 RaymarchFogVolume(
 	VdbSampler DensitySampler,
 #if USE_TEMPERATURE_VDB
 	VdbSampler TemperatureSampler,
+#endif
+#if USE_VELOCITY_VDB
+	VdbSampler VelocitySampler,
 #endif
 #if USE_COLOR_VDB
 	VdbSampler ColorSampler,
@@ -173,6 +179,11 @@ float4 RaymarchFogVolume(
 		half3 SigmaT = SampleScattering(PixelMaterialInputs);
 		half3 Displacement = SampleDisplacement(PixelMaterialInputs);
 		float2 DensityModifications = SampleDensityModifications(PixelMaterialInputs);
+		
+#if USE_VELOCITY_VDB
+		float3 Velocity = SAMPLING_VECTOR_FILTERING(LocalPosition, VelocitySampler.GridBuffer, VelocitySampler.GridType, VelocitySampler.Accessor) * VELOCITY_MULT / VOXEL_SIZE;
+		Displacement += Velocity * SUB_FRAME;
+#endif
 
 		float Density = SAMPLING_FLOAT_FILTERING(LocalPosition - Displacement, DensitySampler.GridBuffer, DensitySampler.GridType, DensitySampler.Accessor);
 		Density = UpdateDensity(Density, DENSITY_MULT, DensityModifications);
@@ -209,7 +220,7 @@ float4 RaymarchFogVolume(
 		{
 #if USE_TEMPERATURE_VDB
 			// Second VDB buffer should be Temperature to simulate a blackbody volume
-			float Temperature = SAMPLING_FLOAT_FILTERING(LocalPosition, TemperatureSampler.GridBuffer, TemperatureSampler.GridType, TemperatureSampler.Accessor) * BLACKBODY_TEMPERATURE;
+			float Temperature = SAMPLING_FLOAT_FILTERING(LocalPosition - Displacement, TemperatureSampler.GridBuffer, TemperatureSampler.GridType, TemperatureSampler.Accessor) * BLACKBODY_TEMPERATURE;
 			float3 TemperatureColor = 0.0;
 			if (CURVE_INDEX >= 0)
 			{
@@ -240,7 +251,7 @@ float4 RaymarchFogVolume(
 #if !MATERIAL_SHADINGMODEL_UNLIT
 	#if USE_COLOR_VDB
 		// Only using input VDB color as a color tint
-		Scattering *= SAMPLING_VECTOR_FILTERING(LocalPosition, ColorSampler.GridBuffer, ColorSampler.GridType, ColorSampler.Accessor);
+		Scattering *= SAMPLING_VECTOR_FILTERING(LocalPosition - Displacement, ColorSampler.GridBuffer, ColorSampler.GridType, ColorSampler.Accessor);
 	#endif
 
 		if (VdbParams.bApplyDirectLighting)
@@ -357,6 +368,9 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 #if USE_TEMPERATURE_VDB
 	VdbSampler TemperatureSampler = InitVdbSampler(TemperatureVdbBuffer);
 #endif
+#if USE_VELOCITY_VDB
+	VdbSampler VelocitySampler = InitVdbSampler(VelocityVdbBuffer);
+#endif
 #if USE_COLOR_VDB
 	VdbSampler ColorSampler = InitVdbSampler(ColorVdbBuffer);
 #endif
@@ -396,6 +410,9 @@ void MainPS(in INPUT_POSITION_QUALIFIERS float4 SvPosition : SV_Position,
 							DensitySampler,
 							#if USE_TEMPERATURE_VDB
 								TemperatureSampler,
+							#endif
+							#if USE_VELOCITY_VDB
+								VelocitySampler,
 							#endif
 							#if USE_COLOR_VDB
 								ColorSampler,

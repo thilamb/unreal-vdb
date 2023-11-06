@@ -71,6 +71,8 @@ class VOLUMERUNTIME_API UVdbSequenceComponent : public UActorComponent, public I
 	void SetManualTick(bool InManualTick);
 	void OnChunkAvailable(uint32 ChunkId);
 
+	void TickSubFrame();
+
 	const class UVdbVolumeSequence* GetPrincipalSequence() const;
 	TObjectPtr<class UVdbVolumeBase> GetPrimarySequence() const;
 

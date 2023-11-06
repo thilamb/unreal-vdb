@@ -72,7 +72,7 @@ FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetCompon
 	float VoxelSize = MainVolume->GetVoxelSize();
 	CustomFloatData0 = FVector4f(InComponent->LocalStepSize, InComponent->ShadowStepSizeMultiplier, VoxelSize, InComponent->Jittering);
 	CustomFloatData1 = FVector4f(InComponent->Anisotropy, InComponent->Albedo, InComponent->BlackbodyIntensity, (CurveIndex == INDEX_NONE) ? InComponent->BlackbodyTemperature : InComponent->TemperatureMultiplier);
-	CustomFloatData2 = FVector4f(InComponent->DensityMultiplier, InComponent->VolumePadding, InComponent->Ambient, 0.f);
+	CustomFloatData2 = FVector4f(InComponent->DensityMultiplier, InComponent->VolumePadding, InComponent->Ambient, InComponent->VelocityMultiplier);
 
 	auto FillValue = [AssetComponent](const UVdbVolumeBase* Base, FVdbRenderBuffer*& Buffer)
 	{
@@ -81,6 +81,7 @@ FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetCompon
 	};
 
 	FillValue(AssetComponent->GetTemperatureVolume(), TemperatureRenderBuffer);
+	FillValue(AssetComponent->GetVelocityVolume(), VelocityRenderBuffer);
 	FillValue(AssetComponent->GetColorVolume(), ColorRenderBuffer);
 
 	bCastDynamicShadow = true;
@@ -208,13 +209,14 @@ void FVdbVolumeSceneProxy::DestroyRenderThreadResources()
 	VdbMaterialRenderExtension->RemoveVdbProxy(this);
 }
 
-void FVdbVolumeSceneProxy::Update(const FMatrix44f& InIndexToLocal, const FVector3f& InIndexMin, const FVector3f& InIndexSize, FVdbRenderBuffer* PrimRenderBuffer, FVdbRenderBuffer* SecRenderBuffer, FVdbRenderBuffer* TerRenderBuffer)
+void FVdbVolumeSceneProxy::Update(const FMatrix44f& InIndexToLocal, const FVector3f& InIndexMin, const FVector3f& InIndexSize, FVdbRenderBuffer* PrimRenderBuffer, FVdbRenderBuffer* SecRenderBuffer, FVdbRenderBuffer* VelRenderBuffer, FVdbRenderBuffer* TerRenderBuffer)
 {
 	IndexToLocal = InIndexToLocal;
 	IndexMin = InIndexMin;
 	IndexSize = InIndexSize;
 	DensityRenderBuffer = PrimRenderBuffer;
 	TemperatureRenderBuffer = SecRenderBuffer;
+	VelocityRenderBuffer = VelRenderBuffer;
 	ColorRenderBuffer = TerRenderBuffer;
 }
 

@@ -105,6 +105,10 @@ FText FVdbAssetComponentDetails::GetCurrentTemperatureGridName() const
 {
 	return GetGridName(CurrentComponent, CurrentComponent->TemperatureGridIndex);
 }
+FText FVdbAssetComponentDetails::GetCurrentVelocityGridName() const
+{
+	return GetGridName(CurrentComponent, CurrentComponent->VelocityGridIndex);
+}
 FText FVdbAssetComponentDetails::GetCurrentColorGridName() const
 {
 	return GetGridName(CurrentComponent, CurrentComponent->ColorGridIndex);
@@ -145,6 +149,14 @@ void FVdbAssetComponentDetails::OnTemperatureGridSelected(TSharedPtr<FString> Sp
 	FPropertyChangedEvent ChangedEvent(UVdbAssetComponent::StaticClass()->FindPropertyByName(GET_MEMBER_NAME_CHECKED(UVdbAssetComponent, TemperatureGridIndex)));
 	CurrentComponent->PostEditChangeProperty(ChangedEvent);
 }
+void FVdbAssetComponentDetails::OnVelocityGridSelected(TSharedPtr<FString> SpecifierName, ESelectInfo::Type SelectInfo)
+{
+	OnGridSelected(CurrentComponent, CurrentComponent->VelocityGridIndex, SpecifierName, SelectInfo);
+
+	// We have to do this manually to trigger component and actor update
+	FPropertyChangedEvent ChangedEvent(UVdbAssetComponent::StaticClass()->FindPropertyByName(GET_MEMBER_NAME_CHECKED(UVdbAssetComponent, VelocityGridIndex)));
+	CurrentComponent->PostEditChangeProperty(ChangedEvent);
+}
 void FVdbAssetComponentDetails::OnColorGridSelected(TSharedPtr<FString> SpecifierName, ESelectInfo::Type SelectInfo)
 {
 	OnGridSelected(CurrentComponent, CurrentComponent->ColorGridIndex, SpecifierName, SelectInfo);
@@ -171,6 +183,7 @@ void FVdbAssetComponentDetails::CustomizeDetails(IDetailLayoutBuilder& DetailBui
 	DetailBuilder.HideProperty(DetailBuilder.GetProperty("VdbAsset"));
 	DetailBuilder.HideProperty(DetailBuilder.GetProperty("DensityGridIndex"));
 	DetailBuilder.HideProperty(DetailBuilder.GetProperty("TemperatureGridIndex"));
+	DetailBuilder.HideProperty(DetailBuilder.GetProperty("VelocityGridIndex"));
 	DetailBuilder.HideProperty(DetailBuilder.GetProperty("ColorGridIndex"));
 
 	IDetailCategoryBuilder& Category = DetailBuilder.EditCategory("Volume", LOCTEXT("FunctionDetailsGrids", "Volume"));
@@ -272,6 +285,33 @@ void FVdbAssetComponentDetails::CustomizeDetails(IDetailLayoutBuilder& DetailBui
 				.OnGenerateRow(this, &FVdbAssetComponentDetails::HandleGenerateRowCombo)
 				.OnSelectionChanged(this, &FVdbAssetComponentDetails::OnTemperatureGridSelected)
 			]
+		];
+	
+	// Velocity Grid
+	Category.AddCustomRow(LOCTEXT("VelocityGrid", "Velocity Grid"))
+		.NameContent()
+		[
+			SNew(STextBlock)
+				.Text(LOCTEXT("VelocityGrid", "Velocity Grid"))
+				.Font(IDetailLayoutBuilder::GetDetailFont())
+		]
+		.ValueContent()
+		[
+			SNew(SComboButton)
+				.ContentPadding(0)
+				.ButtonContent()
+				[
+					SNew(STextBlock)
+						.Text(this, &FVdbAssetComponentDetails::GetCurrentVelocityGridName)
+						.Font(IDetailLayoutBuilder::GetDetailFont())
+				]
+				.MenuContent()
+				[
+					SNew(SListView<TSharedPtr<FString> >)
+						.ListItemsSource(&GridNamesStrings)
+						.OnGenerateRow(this, &FVdbAssetComponentDetails::HandleGenerateRowCombo)
+						.OnSelectionChanged(this, &FVdbAssetComponentDetails::OnVelocityGridSelected)
+				]
 		];
 
 	// Color Grid

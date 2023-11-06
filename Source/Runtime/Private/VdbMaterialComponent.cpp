@@ -42,6 +42,7 @@ void UVdbMaterialComponent::SetVdbAssets(UVdbAssetComponent* Comp)
 {
 	VdbAssets = Comp;
 	Comp->OnFrameChanged.AddUObject(this, &UVdbMaterialComponent::UpdateSceneProxy);
+	Comp->OnSubFrameChanged.AddUObject(this, &UVdbMaterialComponent::UpdateSubFrame);
 }
 
 void UVdbMaterialComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials) const
@@ -96,6 +97,9 @@ void UVdbMaterialComponent::UpdateSceneProxy(uint32 FrameIndex)
 	UVdbVolumeSequence* TemperatureSequence = Cast<UVdbVolumeSequence>(VdbAssets->GetTemperatureVolume());
 	const FVolumeRenderInfos* RenderInfosTemperature = TemperatureSequence ? TemperatureSequence->GetRenderInfos(FrameIndex) : nullptr;
 
+	UVdbVolumeSequence* VelocitySequence = Cast<UVdbVolumeSequence>(VdbAssets->GetVelocityVolume());
+	const FVolumeRenderInfos* RenderInfosVelocity = VelocitySequence ? VelocitySequence->GetRenderInfos(FrameIndex) : nullptr;
+
 	UVdbVolumeSequence* ColorSequence = Cast<UVdbVolumeSequence>(VdbAssets->GetColorVolume());
 	const FVolumeRenderInfos* RenderInfosColor = ColorSequence ? ColorSequence->GetRenderInfos(FrameIndex) : nullptr;
 
@@ -110,11 +114,28 @@ void UVdbMaterialComponent::UpdateSceneProxy(uint32 FrameIndex)
 			IndexToLocal = MainRenderInfosDensity->GetIndexToLocal(),
 			DensRenderBuffer = MainRenderInfosDensity->GetRenderResource(),
 			TempRenderBuffer = RenderInfosTemperature ? RenderInfosTemperature->GetRenderResource() : nullptr,
+			VelRenderBuffer = RenderInfosVelocity ? RenderInfosVelocity->GetRenderResource() : nullptr,
 			ColorRenderBuffer = RenderInfosColor ? RenderInfosColor->GetRenderResource() : nullptr]
 		(FRHICommandList& RHICmdList)
 		{
-			VdbMaterialSceneProxy->Update(IndexToLocal, IndexMin, IndexSize, DensRenderBuffer, TempRenderBuffer, ColorRenderBuffer);
+			VdbMaterialSceneProxy->Update(IndexToLocal, IndexMin, IndexSize, DensRenderBuffer, TempRenderBuffer, VelRenderBuffer, ColorRenderBuffer);
 		});
+	}
+}
+
+void UVdbMaterialComponent::UpdateSubFrame(float Value)
+{
+	FVdbVolumeSceneProxy* VdbMaterialSceneProxy = static_cast<FVdbVolumeSceneProxy*>(SceneProxy);
+	if (VdbMaterialSceneProxy != nullptr)
+	{
+		ENQUEUE_RENDER_COMMAND(VdbInterFrame)(
+			[this,
+			VdbMaterialSceneProxy,
+			Value]
+			(FRHICommandList& RHICmdList)
+			{
+				VdbMaterialSceneProxy->UpdateSubFrameValue(Value);
+			});
 	}
 }
 

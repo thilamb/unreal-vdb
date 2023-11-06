@@ -383,7 +383,7 @@ public:
 		bool TrilinearSampling,
 		bool WriteDepth,
 		bool FirstLight,
-		bool UseTempVdb, bool UseColorVdb,
+		bool UseTempVdb, bool UseVelVdb, bool UseColorVdb,
 		FVdbElementData&& ShaderElementData)
 		: FMeshPassProcessor(Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
 		, VdbShaderElementData(ShaderElementData)
@@ -392,6 +392,7 @@ public:
 		, bImprovedEnvLight(ImprovedEnvLight)
 		, bTrilinearSampling(TrilinearSampling)
 		, bTemperatureVdb(UseTempVdb)
+		, bVelocityVdb(UseVelVdb)
 		, bColorVdb(UseColorVdb)
 	{
 		if (bLevelSet && !bTranslucentLevelSet)
@@ -464,40 +465,72 @@ public:
 			}
 			else
 			{
-				// combination of 4 params: 2^4 = 16 different cases
+				// combination of 5 params: 2^5 = 32 different cases
 				// TODO: this is getting ridiculous, find better solution
-				if (!bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && !bTrilinearSampling)
+				if (!bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && !bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume)
-				else if (!bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && bTrilinearSampling)
+				else if (!bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && !bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity)
+				else if (!bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Trilinear)
-				else if (!bTemperatureVdb && !bColorVdb && bImprovedEnvLight && !bTrilinearSampling)
+				else if (!bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Trilinear)
+				else if (!bTemperatureVdb && !bColorVdb && bImprovedEnvLight && !bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_EnvLight)
-				else if (!bTemperatureVdb && !bColorVdb && bImprovedEnvLight && bTrilinearSampling)
+				else if (!bTemperatureVdb && !bColorVdb && bImprovedEnvLight && !bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_EnvLight)
+				else if (!bTemperatureVdb && !bColorVdb && bImprovedEnvLight && bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_EnvLight_Trilinear)
-				else if (!bTemperatureVdb && bColorVdb && !bImprovedEnvLight && !bTrilinearSampling)
+				else if (!bTemperatureVdb && !bColorVdb && bImprovedEnvLight && bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_EnvLight_Trilinear)
+				else if (!bTemperatureVdb && bColorVdb && !bImprovedEnvLight && !bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color)
-				else if (!bTemperatureVdb && bColorVdb && !bImprovedEnvLight && bTrilinearSampling)
+				else if (!bTemperatureVdb && bColorVdb && !bImprovedEnvLight && !bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Color)
+				else if (!bTemperatureVdb && bColorVdb && !bImprovedEnvLight && bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_Trilinear)
-				else if (!bTemperatureVdb && bColorVdb && bImprovedEnvLight && !bTrilinearSampling)
+				else if (!bTemperatureVdb && bColorVdb && !bImprovedEnvLight && bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Color_Trilinear)
+				else if (!bTemperatureVdb && bColorVdb && bImprovedEnvLight && !bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_EnvLight)
-				else if (!bTemperatureVdb && bColorVdb && bImprovedEnvLight && bTrilinearSampling)
+				else if (!bTemperatureVdb && bColorVdb && bImprovedEnvLight && !bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Color_EnvLight)
+				else if (!bTemperatureVdb && bColorVdb && bImprovedEnvLight && bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Color_EnvLight_Trilinear)
-				else if (bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && !bTrilinearSampling)
+				else if (!bTemperatureVdb && bColorVdb && bImprovedEnvLight && bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Color_EnvLight_Trilinear)
+				else if (bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && !bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody)
-				else if (bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && bTrilinearSampling)
+				else if (bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && !bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Blackbody)
+				else if (bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Trilinear)
-				else if (bTemperatureVdb && !bColorVdb && bImprovedEnvLight && !bTrilinearSampling)
+				else if (bTemperatureVdb && !bColorVdb && !bImprovedEnvLight && bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Blackbody_Trilinear)
+				else if (bTemperatureVdb && !bColorVdb && bImprovedEnvLight && !bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_EnvLight)
-				else if (bTemperatureVdb && !bColorVdb && bImprovedEnvLight && bTrilinearSampling)
+				else if (bTemperatureVdb && !bColorVdb && bImprovedEnvLight && !bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Blackbody_EnvLight)
+				else if (bTemperatureVdb && !bColorVdb && bImprovedEnvLight && bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_EnvLight_Trilinear)
-				else if (bTemperatureVdb && bColorVdb && !bImprovedEnvLight && !bTrilinearSampling)
+				else if (bTemperatureVdb && !bColorVdb && bImprovedEnvLight && bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Blackbody_EnvLight_Trilinear)
+				else if (bTemperatureVdb && bColorVdb && !bImprovedEnvLight && !bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color)
-				else if (bTemperatureVdb && bColorVdb && !bImprovedEnvLight && bTrilinearSampling)
+				else if (bTemperatureVdb && bColorVdb && !bImprovedEnvLight && !bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Blackbody_Color)
+				else if (bTemperatureVdb && bColorVdb && !bImprovedEnvLight && bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_Trilinear)
-				else if (bTemperatureVdb && bColorVdb && bImprovedEnvLight && !bTrilinearSampling)
+				else if (bTemperatureVdb && bColorVdb && !bImprovedEnvLight && bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Blackbody_Color_Trilinear)
+				else if (bTemperatureVdb && bColorVdb && bImprovedEnvLight && !bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight)
-				else if (bTemperatureVdb && bColorVdb && bImprovedEnvLight && bTrilinearSampling)
+				else if (bTemperatureVdb && bColorVdb && bImprovedEnvLight && !bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Blackbody_Color_EnvLight)
+				else if (bTemperatureVdb && bColorVdb && bImprovedEnvLight && bTrilinearSampling && !bVelocityVdb)
 					PROCESS_SHADER(FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear)
+				else if (bTemperatureVdb && bColorVdb && bImprovedEnvLight && bTrilinearSampling && bVelocityVdb)
+					PROCESS_SHADER(FVdbShaderPS_FogVolume_Velocity_Blackbody_Color_EnvLight_Trilinear)
 			}
 		}
 	}
@@ -552,5 +585,6 @@ private:
 	bool bImprovedEnvLight;
 	bool bTrilinearSampling;
 	bool bTemperatureVdb;
+	bool bVelocityVdb;
 	bool bColorVdb;
 };

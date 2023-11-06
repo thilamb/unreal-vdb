@@ -74,9 +74,9 @@ EReimportResult::Type UVdbReimportFactory::Reimport(UObject* Obj)
 		VdbVolume->GetAssetImportData()->Update(Filename);
 
 		// Try to find the outer package so we can dirty it up
-		if (VdbVolume->GetOuter())
+		if (UObject* Outer = VdbVolume->GetOuter())
 		{
-			VdbVolume->GetOuter()->MarkPackageDirty();
+			Outer->MarkPackageDirty();
 		}
 		else
 		{

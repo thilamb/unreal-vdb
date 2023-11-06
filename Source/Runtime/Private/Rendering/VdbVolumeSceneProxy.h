@@ -38,10 +38,12 @@ public:
 	FVector4f GetCustomFloatData2() const { return CustomFloatData2; }
 	FVector4f GetSliceMin() const { return SliceMinData; }
 	FVector4f GetSliceMax() const { return SliceMaxData; }
+	float GetSubframeValue() const { return SubFrameValue; }
 	const FMatrix44f& GetIndexToLocal() const { return IndexToLocal; }
 	class UMaterialInterface* GetMaterial() const { return Material; }
 	const FVdbRenderBuffer* GetDensityRenderResource() const { return DensityRenderBuffer; }
 	const FVdbRenderBuffer* GetTemperatureRenderResource() const { return TemperatureRenderBuffer; }
+	const FVdbRenderBuffer* GetVelocityRenderResource() const { return VelocityRenderBuffer; }
 	const FVdbRenderBuffer* GetColorRenderResource() const { return ColorRenderBuffer; }
 	FTexture* GetBlackbodyAtlasResource() const { return (CurveIndex != INDEX_NONE) ? CurveAtlasTex : nullptr; }
 	
@@ -55,8 +57,9 @@ public:
 	bool RendersAfterTransparents() const { return RenderAfterTransparents; }
 	void ResetVisibility() { VisibleViews.Empty(4); MeshBatchPerView.Empty(4); }
 	bool IsVisible(const FSceneView* View) const { return VisibleViews.Find(View) != INDEX_NONE; }
-	void Update(const FMatrix44f& IndexToLocal, const FVector3f& IndexMin, const FVector3f& IndexSize, FVdbRenderBuffer* DensityRenderBuffer, FVdbRenderBuffer* TemperatureRenderBuffer, FVdbRenderBuffer* ColorRenderBuffer);
+	void Update(const FMatrix44f& IndexToLocal, const FVector3f& IndexMin, const FVector3f& IndexSize, FVdbRenderBuffer* DensityRenderBuffer, FVdbRenderBuffer* TemperatureRenderBuffer, FVdbRenderBuffer* VelocityRenderBuffer, FVdbRenderBuffer* ColorRenderBuffer);
 	void UpdateCurveAtlasTex();
+	void UpdateSubFrameValue(float Val) { SubFrameValue = Val; }
 
 	FRDGTextureRef GetOrCreateRenderTarget(FRDGBuilder& GraphBuilder, const FIntPoint& RtSize, bool EvenFrame);
 
@@ -106,10 +109,12 @@ private:
 
 	FVdbRenderBuffer* DensityRenderBuffer;
 	FVdbRenderBuffer* TemperatureRenderBuffer;
+	FVdbRenderBuffer* VelocityRenderBuffer;
 	FVdbRenderBuffer* ColorRenderBuffer;
 	FVector3f IndexMin;
 	FVector3f IndexSize;
 	FMatrix44f IndexToLocal;
+	float SubFrameValue = 0.f;
 
 	mutable TArray<const FSceneView*> VisibleViews;
 	mutable TMap<const FSceneView*, FMeshBatch*> MeshBatchPerView;

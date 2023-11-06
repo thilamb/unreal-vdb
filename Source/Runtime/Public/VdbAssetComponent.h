@@ -45,6 +45,9 @@ class VOLUMERUNTIME_API UVdbAssetComponent : public UActorComponent
 	int32 TemperatureGridIndex = -1;
 
 	UPROPERTY(EditAnywhere, Category = Volume, meta = (AllowPrivateAccess = "true"))
+	int32 VelocityGridIndex = -1;
+
+	UPROPERTY(EditAnywhere, Category = Volume, meta = (AllowPrivateAccess = "true"))
 	int32 ColorGridIndex = -1;
 
 	UFUNCTION(BlueprintCallable, Category = Volume)
@@ -59,9 +62,14 @@ class VOLUMERUNTIME_API UVdbAssetComponent : public UActorComponent
 	UVdbVolumeBase* GetColorVolume();
 	const UVdbVolumeBase* GetColorVolume() const;
 
+	UFUNCTION(BlueprintCallable, Category = Volume)
+	UVdbVolumeBase* GetVelocityVolume();
+	const UVdbVolumeBase* GetVelocityVolume() const;
+
 	//----------------------------------------------------------------------------
 
 	void BroadcastFrameChanged(uint32 Frame, bool Force = false);
+	void BroadcastSubFrameChanged(float Value);
 	void GetReferencedContentObjects(TArray<UObject*>& Objects) const;
 
 	EVdbClass GetVdbClass() const;
@@ -86,6 +94,9 @@ class VOLUMERUNTIME_API UVdbAssetComponent : public UActorComponent
 	
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnFrameChanged, uint32);
 	FOnFrameChanged OnFrameChanged;
+
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnSubFrameChanged, float);
+	FOnSubFrameChanged OnSubFrameChanged;
 
 	void SetTargetFrameIndex(uint32 Frame) { TargetFrameIndex = Frame; }
 	uint32 GetCurrFrameIndex() const { return CurrFrameIndex; }

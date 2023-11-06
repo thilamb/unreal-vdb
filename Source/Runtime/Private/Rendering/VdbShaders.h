@@ -42,11 +42,12 @@ struct FVdbElementData : public FMeshMaterialShaderElementData
 	FIntVector4 CustomIntData1; // x: BlackbodyCurveIndex, y: CurveAtlaHeight, z: TranslucentLevelSet, w: TemperatureOnly
 	FVector4f CustomFloatData0; // x: Local step size, y: Shadow step size multiplier, z: voxel size, w: jittering
 	FVector4f CustomFloatData1; // x: anisotropy, y: albedo, z: blackbody intensity, w: blackbody temperature
-	FVector4f CustomFloatData2; // x: density mul, y: padding, z: ambient, w: unused
+	FVector4f CustomFloatData2; // x: density mul, y: padding, z: ambient, w: velocity mult
 	FVector4f SliceMinData; // xyz: slice data, w: unused
 	FVector4f SliceMaxData; // xyz: slice data, w: unused
 	FShaderResourceViewRHIRef DensityBufferSRV;
 	FShaderResourceViewRHIRef TemperatureBufferSRV;
+	FShaderResourceViewRHIRef VelocityBufferSRV;
 	FShaderResourceViewRHIRef ColorBufferSRV;
 	FShaderResourceViewRHIRef BlackbodyColorSRV;
 };
@@ -112,6 +113,7 @@ class FVdbShaderPS : public FMeshMaterialShader
 
 	LAYOUT_FIELD(FShaderResourceParameter, DensityVdbBuffer);
 	LAYOUT_FIELD(FShaderResourceParameter, TemperatureVdbBuffer);
+	LAYOUT_FIELD(FShaderResourceParameter, VelocityVdbBuffer);
 	LAYOUT_FIELD(FShaderResourceParameter, ColorVdbBuffer);
 	LAYOUT_FIELD(FShaderResourceParameter, BlackbodyColor);
 	LAYOUT_FIELD(FShaderParameter, CustomIntData0);
@@ -142,6 +144,7 @@ class FVdbShaderPS : public FMeshMaterialShader
 	{
 		DensityVdbBuffer.Bind(Initializer.ParameterMap, TEXT("DensityVdbBuffer"));
 		TemperatureVdbBuffer.Bind(Initializer.ParameterMap, TEXT("TemperatureVdbBuffer"));
+		VelocityVdbBuffer.Bind(Initializer.ParameterMap, TEXT("VelocityVdbBuffer"));
 		ColorVdbBuffer.Bind(Initializer.ParameterMap, TEXT("ColorVdbBuffer"));
 		BlackbodyColor.Bind(Initializer.ParameterMap, TEXT("BlackbodyColor"));
 		CustomIntData0.Bind(Initializer.ParameterMap, TEXT("CustomIntData0"));
@@ -200,6 +203,7 @@ public:
 
 		ShaderBindings.Add(DensityVdbBuffer, ShaderElementData.DensityBufferSRV);
 		ShaderBindings.Add(TemperatureVdbBuffer, ShaderElementData.TemperatureBufferSRV);
+		ShaderBindings.Add(VelocityVdbBuffer, ShaderElementData.VelocityBufferSRV);
 		ShaderBindings.Add(ColorVdbBuffer, ShaderElementData.ColorBufferSRV);
 		ShaderBindings.Add(BlackbodyColor, ShaderElementData.BlackbodyColorSRV);
 		ShaderBindings.Add(CustomIntData0, ShaderElementData.CustomIntData0);
@@ -212,7 +216,7 @@ public:
 	}
 };
 
-template<bool IsLevelSet, bool UseTemperatureBuffer, bool UseColorBuffer, bool NicerEnvLight, bool Trilinear>
+template<bool IsLevelSet, bool UseTemperatureBuffer, bool UseVelocity, bool UseColorBuffer, bool NicerEnvLight, bool Trilinear>
 class TVdbShaderPS : public FVdbShaderPS
 {
 	DECLARE_SHADER_TYPE(TVdbShaderPS, MeshMaterial);
@@ -248,6 +252,7 @@ public:
 		FVdbShaderPS::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.SetDefine(TEXT("VDB_LEVEL_SET"), IsLevelSet);
 		OutEnvironment.SetDefine(TEXT("USE_TEMPERATURE_VDB"), UseTemperatureBuffer);
+		OutEnvironment.SetDefine(TEXT("USE_VELOCITY_VDB"), UseVelocity);
 		OutEnvironment.SetDefine(TEXT("USE_COLOR_VDB"), UseColorBuffer);
 		OutEnvironment.SetDefine(TEXT("NICER_BUT_EXPENSIVE_ENVLIGHT"), NicerEnvLight);
 		OutEnvironment.SetDefine(TEXT("USE_TRILINEAR_SAMPLING"), Trilinear);
@@ -255,25 +260,41 @@ public:
 };
 
 // TODO: this is getting ridiculous. Find other solution
-typedef TVdbShaderPS<true, false, false, false, false> FVdbShaderPS_LevelSet;
-typedef TVdbShaderPS<true, true, false, false, false> FVdbShaderPS_LevelSet_Translucent; // reusing USE_TEMPERATURE_VDB variation for translucency to avoid another variation
-typedef TVdbShaderPS<true, true, false, true, false> FVdbShaderPS_LevelSet_Translucent_EnvLight; // reusing USE_TEMPERATURE_VDB variation for translucency to avoid another variation
-typedef TVdbShaderPS<false, false, false, false, false>  FVdbShaderPS_FogVolume;
-typedef TVdbShaderPS<false, false, false, false, true>  FVdbShaderPS_FogVolume_Trilinear;
-typedef TVdbShaderPS<false, false, false, true, false>  FVdbShaderPS_FogVolume_EnvLight;
-typedef TVdbShaderPS<false, false, false, true, true>  FVdbShaderPS_FogVolume_EnvLight_Trilinear;
-typedef TVdbShaderPS<false, false, true, false, false>  FVdbShaderPS_FogVolume_Color;
-typedef TVdbShaderPS<false, false, true, false, true>  FVdbShaderPS_FogVolume_Color_Trilinear;
-typedef TVdbShaderPS<false, false, true, true, false>  FVdbShaderPS_FogVolume_Color_EnvLight;
-typedef TVdbShaderPS<false, false, true, true, true>  FVdbShaderPS_FogVolume_Color_EnvLight_Trilinear;
-typedef TVdbShaderPS<false, true, false, false, false>  FVdbShaderPS_FogVolume_Blackbody;
-typedef TVdbShaderPS<false, true, false, false, true>  FVdbShaderPS_FogVolume_Blackbody_Trilinear;
-typedef TVdbShaderPS<false, true, false, true, false>  FVdbShaderPS_FogVolume_Blackbody_EnvLight;
-typedef TVdbShaderPS<false, true, false, true, true>  FVdbShaderPS_FogVolume_Blackbody_EnvLight_Trilinear;
-typedef TVdbShaderPS<false, true, true, false, false>  FVdbShaderPS_FogVolume_Blackbody_Color;
-typedef TVdbShaderPS<false, true, true, false, true>  FVdbShaderPS_FogVolume_Blackbody_Color_Trilinear;
-typedef TVdbShaderPS<false, true, true, true, false>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight;
-typedef TVdbShaderPS<false, true, true, true, true>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear;
+typedef TVdbShaderPS<true, false, false, false, false, false> FVdbShaderPS_LevelSet;
+typedef TVdbShaderPS<true, true, false, false, false, false> FVdbShaderPS_LevelSet_Translucent; // reusing USE_TEMPERATURE_VDB variation for translucency to avoid another variation
+typedef TVdbShaderPS<true, true, false, false, true, false> FVdbShaderPS_LevelSet_Translucent_EnvLight; // reusing USE_TEMPERATURE_VDB variation for translucency to avoid another variation
+typedef TVdbShaderPS<false, false, false, false, false, false>  FVdbShaderPS_FogVolume;
+typedef TVdbShaderPS<false, false, true, false, false, false>  FVdbShaderPS_FogVolume_Velocity;
+typedef TVdbShaderPS<false, false, false, false, false, true>  FVdbShaderPS_FogVolume_Trilinear;
+typedef TVdbShaderPS<false, false, true, false, false, true>  FVdbShaderPS_FogVolume_Velocity_Trilinear;
+typedef TVdbShaderPS<false, false, false, false, true, false>  FVdbShaderPS_FogVolume_EnvLight;
+typedef TVdbShaderPS<false, false, true, false, true, false>  FVdbShaderPS_FogVolume_Velocity_EnvLight;
+typedef TVdbShaderPS<false, false, false, false, true, true>  FVdbShaderPS_FogVolume_EnvLight_Trilinear;
+typedef TVdbShaderPS<false, false, true, false, true, true>  FVdbShaderPS_FogVolume_Velocity_EnvLight_Trilinear;
+typedef TVdbShaderPS<false, false, false, true, false, false>  FVdbShaderPS_FogVolume_Color;
+typedef TVdbShaderPS<false, false, true, true, false, false>  FVdbShaderPS_FogVolume_Velocity_Color;
+typedef TVdbShaderPS<false, false, false, true, false, true>  FVdbShaderPS_FogVolume_Color_Trilinear;
+typedef TVdbShaderPS<false, false, true, true, false, true>  FVdbShaderPS_FogVolume_Velocity_Color_Trilinear;
+typedef TVdbShaderPS<false, false, false, true, true, false>  FVdbShaderPS_FogVolume_Color_EnvLight;
+typedef TVdbShaderPS<false, false, true, true, true, false>  FVdbShaderPS_FogVolume_Velocity_Color_EnvLight;
+typedef TVdbShaderPS<false, false, false, true, true, true>  FVdbShaderPS_FogVolume_Color_EnvLight_Trilinear;
+typedef TVdbShaderPS<false, false, true, true, true, true>  FVdbShaderPS_FogVolume_Velocity_Color_EnvLight_Trilinear;
+typedef TVdbShaderPS<false, true, false, false, false, false>  FVdbShaderPS_FogVolume_Blackbody;
+typedef TVdbShaderPS<false, true, true, false, false, false>  FVdbShaderPS_FogVolume_Velocity_Blackbody;
+typedef TVdbShaderPS<false, true, false, false, false, true>  FVdbShaderPS_FogVolume_Blackbody_Trilinear;
+typedef TVdbShaderPS<false, true, true, false, false, true>  FVdbShaderPS_FogVolume_Velocity_Blackbody_Trilinear;
+typedef TVdbShaderPS<false, true, false, false, true, false>  FVdbShaderPS_FogVolume_Blackbody_EnvLight;
+typedef TVdbShaderPS<false, true, true, false, true, false>  FVdbShaderPS_FogVolume_Velocity_Blackbody_EnvLight;
+typedef TVdbShaderPS<false, true, false, false, true, true>  FVdbShaderPS_FogVolume_Blackbody_EnvLight_Trilinear;
+typedef TVdbShaderPS<false, true, true, false, true, true>  FVdbShaderPS_FogVolume_Velocity_Blackbody_EnvLight_Trilinear;
+typedef TVdbShaderPS<false, true, false, true, false, false>  FVdbShaderPS_FogVolume_Blackbody_Color;
+typedef TVdbShaderPS<false, true, true, true, false, false>  FVdbShaderPS_FogVolume_Velocity_Blackbody_Color;
+typedef TVdbShaderPS<false, true, false, true, false, true>  FVdbShaderPS_FogVolume_Blackbody_Color_Trilinear;
+typedef TVdbShaderPS<false, true, true, true, false, true>  FVdbShaderPS_FogVolume_Velocity_Blackbody_Color_Trilinear;
+typedef TVdbShaderPS<false, true, false, true, true, false>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight;
+typedef TVdbShaderPS<false, true, true, true, true, false>  FVdbShaderPS_FogVolume_Velocity_Blackbody_Color_EnvLight;
+typedef TVdbShaderPS<false, true, false, true, true, true>  FVdbShaderPS_FogVolume_Blackbody_Color_EnvLight_Trilinear;
+typedef TVdbShaderPS<false, true, true, true, true, true>  FVdbShaderPS_FogVolume_Velocity_Blackbody_Color_EnvLight_Trilinear;
 
 
 #if VDB_CAST_SHADOWS

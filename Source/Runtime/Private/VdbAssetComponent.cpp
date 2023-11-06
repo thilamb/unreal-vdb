@@ -99,6 +99,11 @@ void UVdbAssetComponent::BroadcastFrameChanged(uint32 Frame, bool Force)
 	}
 }
 
+void UVdbAssetComponent::BroadcastSubFrameChanged(float Value)
+{
+	OnSubFrameChanged.Broadcast(Value);
+}
+
 void UVdbAssetComponent::GetReferencedContentObjects(TArray<UObject*>& Objects) const
 {
 	for (auto& Grid : VdbAsset->VdbVolumes)
@@ -195,6 +200,26 @@ const UVdbVolumeBase* UVdbAssetComponent::GetColorVolume() const
 	}
 	return nullptr;
 }
+
+UVdbVolumeBase* UVdbAssetComponent::GetVelocityVolume()
+{
+	if (VdbAsset && VelocityGridIndex >= 0 && VelocityGridIndex < VdbAsset->VdbVolumes.Num())
+	{
+		UVdbVolumeBase* Volume = VdbAsset->VdbVolumes[VelocityGridIndex];
+		return Volume->IsVectorGrid() ? Volume : nullptr;
+	}
+	return nullptr;
+}
+const UVdbVolumeBase* UVdbAssetComponent::GetVelocityVolume() const
+{
+	if (VdbAsset && VelocityGridIndex >= 0 && VelocityGridIndex < VdbAsset->VdbVolumes.Num())
+	{
+		UVdbVolumeBase* Volume = VdbAsset->VdbVolumes[VelocityGridIndex];
+		return Volume->IsVectorGrid() ? Volume : nullptr;
+	}
+	return nullptr;
+}
+
 
 #if WITH_EDITOR
 void UVdbAssetComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
