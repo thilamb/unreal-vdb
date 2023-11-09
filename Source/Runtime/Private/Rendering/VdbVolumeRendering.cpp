@@ -302,10 +302,12 @@ void FVdbVolumeRendering::ShadowDepth_RenderThread(FShadowDepthRenderParameters&
 						DrawDynamicMeshPass(InView, RHICmdList,
 							[&](FDynamicPassMeshDrawListContext* DynamicMeshPassContext)
 							{
+								bool OfflineRender = InView.bIsOfflineRender;
+
 								FVdbShadowDepthShaderElementData ShaderElementData;
-								ShaderElementData.CustomIntData0 = Proxy->GetCustomIntData0();
+								ShaderElementData.CustomIntData0 = Proxy->GetCustomIntData0(OfflineRender);
 								ShaderElementData.CustomIntData1 = Proxy->GetCustomIntData1();
-								ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0();
+								ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0(OfflineRender);
 								ShaderElementData.CustomFloatData1 = Proxy->GetCustomFloatData1();
 								ShaderElementData.CustomFloatData2 = Proxy->GetCustomFloatData2();
 								ShaderElementData.SliceMinData = Proxy->GetSliceMin();
@@ -451,10 +453,12 @@ void FVdbVolumeRendering::TranslucentShadowDepth_RenderThread(FTranslucentShadow
 						DrawDynamicMeshPass(InView, RHICmdList,
 							[&](FDynamicPassMeshDrawListContext* DynamicMeshPassContext)
 							{
+								bool OfflineRender = InView.bIsOfflineRender;
+
 								FVdbShadowDepthShaderElementData ShaderElementData;
-								ShaderElementData.CustomIntData0 = Proxy->GetCustomIntData0();
+								ShaderElementData.CustomIntData0 = Proxy->GetCustomIntData0(OfflineRender);
 								ShaderElementData.CustomIntData1 = Proxy->GetCustomIntData1();
-								ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0();
+								ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0(OfflineRender);
 								ShaderElementData.CustomFloatData1 = Proxy->GetCustomFloatData1();
 								ShaderElementData.CustomFloatData2 = Proxy->GetCustomFloatData2();
 								ShaderElementData.SliceMinData = Proxy->GetSliceMin();
@@ -847,10 +851,12 @@ void FVdbVolumeRendering::RenderLight(
 			DrawDynamicMeshPass(InView, RHICmdList,
 				[&](FDynamicPassMeshDrawListContext* DynamicMeshPassContext)
 				{
+					bool OfflineRender = InView.bIsOfflineRender;
+
 					FVdbElementData ShaderElementData;
-					ShaderElementData.CustomIntData0 = Proxy->GetCustomIntData0();
+					ShaderElementData.CustomIntData0 = Proxy->GetCustomIntData0(OfflineRender);
 					ShaderElementData.CustomIntData1 = Proxy->GetCustomIntData1();
-					ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0();
+					ShaderElementData.CustomFloatData0 = Proxy->GetCustomFloatData0(OfflineRender);
 					ShaderElementData.CustomFloatData1 = Proxy->GetCustomFloatData1();
 					ShaderElementData.CustomFloatData2 = Proxy->GetCustomFloatData2();
 					ShaderElementData.SliceMinData = Proxy->GetSliceMin();

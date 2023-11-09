@@ -31,9 +31,9 @@ public:
 
 	FVector3f GetIndexMin() const { return IndexMin; }
 	FVector3f GetIndexSize() const { return IndexSize; }
-	FIntVector4 GetCustomIntData0() const { return CustomIntData0; }
+	FIntVector4 GetCustomIntData0(bool Offline) const { return Offline ? CustomIntDataOffline0 : CustomIntData0; }
 	FIntVector4 GetCustomIntData1() const { return CustomIntData1; }
-	FVector4f GetCustomFloatData0() const { return CustomFloatData0; }
+	FVector4f GetCustomFloatData0(bool Offline) const { return Offline ? CustomFloatDataOffline0 : CustomFloatData0; }
 	FVector4f GetCustomFloatData1() const { return CustomFloatData1; }
 	FVector4f GetCustomFloatData2() const { return CustomFloatData2; }
 	FVector4f GetSliceMin() const { return SliceMinData; }
@@ -96,8 +96,10 @@ private:
 	bool RenderAfterTransparents;
 
 	FIntVector4 CustomIntData0;
+	FIntVector4 CustomIntDataOffline0;
 	FIntVector4 CustomIntData1;
 	FVector4f CustomFloatData0;
+	FVector4f CustomFloatDataOffline0;
 	FVector4f CustomFloatData1;
 	FVector4f CustomFloatData2;
 	FVector4f SliceMinData;

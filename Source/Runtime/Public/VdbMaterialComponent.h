@@ -38,10 +38,6 @@ class VOLUMERUNTIME_API UVdbMaterialComponent : public UPrimitiveComponent
 	UPROPERTY(EditAnywhere, Category = Volume)
 	TObjectPtr<class UMaterialInterface> Material;
 
-	// Max number of ray bounces
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (ClampMin = "1", UIMin = "1"))
-	int32 MaxRayDepth = 1000;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (ClampMin = "1", UIMin = "1"))
 	int32 SamplesPerPixel = 1;
 
@@ -63,29 +59,45 @@ class VOLUMERUNTIME_API UVdbMaterialComponent : public UPrimitiveComponent
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
 	bool TrilinearSampling = false;
 
-	// Add volume padding to account for additional details or displacement
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
-	float VolumePadding = 0.0;
-
 	// Wether to allow colored transmittance during light scattering. More physically based but less artistic-friendly when enabled.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
 	bool ColoredTransmittance = true;
-
-	// Enable temporal noise (including sub-frame variation for movie render queue)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
-	bool TemporalNoise = true;
 
 	// Enable better quality environment sampling (SkyLight) BUT with much slower performances. Recommended for offline rendering (MRQ)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes", meta = (DisplayName="Improved environment sampling (SLOW)"))
 	bool ImprovedEnvLight = true;
 
+	// Max number of ray bounces
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes|Advanced", meta = (ClampMin = "1", UIMin = "1"))
+	int32 MaxRayDepth = 1000;
+
+	// Enable temporal noise (including sub-frame variation for movie render queue)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes|Advanced")
+	bool TemporalNoise = true;
+
 	// VDBs are rendered after opaques and before transparent by default. Check this option to render them after transparent objects.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes|Advanced")
 	bool RenderAfterTransparents = false;
 
+	// Add volume padding to account for additional details or displacement
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes|Advanced")
+	float VolumePadding = 0.0;
+
 	// Velocity multiplier
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes|Advanced")
 	float VelocityMultiplier = 1.0;
+
+	// Divides LocalStepSize ONLY during offline rendering (Movie Render Queue) to get better precision during offline rendering
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes|Offline", meta = (ClampMin = "1.0", UIMin = "1.0"))
+	float OfflineLocalStepMultiplier = 1.0;
+
+	// Divides ShadowStepSizeMultiplier ONLY during offline rendering (Movie Render Queue) to get better precision during offline rendering
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes|Offline", meta = (ClampMin = "1.0", UIMin = "1.0"))
+	float OfflineShadowStepSizeMultiplier = 1.0;
+
+	// Is multiplied to SamplesPerPixel ONLY during offline rendering (Movie Render Queue)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Attributes|Offline", meta = (ClampMin = "1.0", UIMin = "1.0"))
+	float OfflineSamplesPerPixelMultiplier = 1.0;
 
 	// Density multiplier of the volume, modulating VdbPrincipal values 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Volume|Shading", meta = (ClampMin = "0.0", UIMin = "0.0"))

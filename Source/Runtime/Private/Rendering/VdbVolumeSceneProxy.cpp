@@ -67,10 +67,15 @@ FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetCompon
 	CurveAtlasTex = CurveAtlas ? CurveAtlas->GetResource() : nullptr;
 	uint32 AtlasHeight = CurveAtlas ? CurveAtlas->TextureHeight : 0;
 
-	CustomIntData0 = FIntVector4(InComponent->MaxRayDepth, InComponent->SamplesPerPixel, InComponent->ColoredTransmittance, InComponent->TemporalNoise);
+	CustomIntDataOffline0 = CustomIntData0 = FIntVector4(InComponent->MaxRayDepth, InComponent->SamplesPerPixel, InComponent->ColoredTransmittance, InComponent->TemporalNoise);
+	CustomIntDataOffline0.Y *= InComponent->OfflineSamplesPerPixelMultiplier;
+
 	CustomIntData1 = FIntVector4(CurveIndex, int32(AtlasHeight), TranslucentLevelSet, TemperatureOnly);
 	float VoxelSize = MainVolume->GetVoxelSize();
-	CustomFloatData0 = FVector4f(InComponent->LocalStepSize, InComponent->ShadowStepSizeMultiplier, VoxelSize, InComponent->Jittering);
+	CustomFloatDataOffline0 = CustomFloatData0 = FVector4f(InComponent->LocalStepSize, InComponent->ShadowStepSizeMultiplier, VoxelSize, InComponent->Jittering);
+	CustomFloatDataOffline0.X /= InComponent->OfflineLocalStepMultiplier;
+	CustomFloatDataOffline0.Y /= InComponent->OfflineShadowStepSizeMultiplier;
+
 	CustomFloatData1 = FVector4f(InComponent->Anisotropy, InComponent->Albedo, InComponent->BlackbodyIntensity, (CurveIndex == INDEX_NONE) ? InComponent->BlackbodyTemperature : InComponent->TemperatureMultiplier);
 	CustomFloatData2 = FVector4f(InComponent->DensityMultiplier, InComponent->VolumePadding, InComponent->Ambient, InComponent->VelocityMultiplier);
 
