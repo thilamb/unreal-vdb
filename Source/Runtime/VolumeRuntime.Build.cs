@@ -92,5 +92,8 @@ public class VolumeRuntime : ModuleRules
 
 		PublicDefinitions.Add("VDB_ENGINE_MODIFICATIONS=0");
 		PublicDefinitions.Add("VDB_CAST_SHADOWS=0");
+		
+		// Support for older versions of Unreal Engine
+		PublicDefinitions.Add("VDB_UE_5_2=0");
 	}
 }

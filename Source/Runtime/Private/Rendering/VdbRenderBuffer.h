@@ -25,7 +25,11 @@ public:
 	void UploadData(uint64 MemByteSize, const uint8* MemPtr);
 	bool IsUploadFinished() const { return UploadFinished; }
 
+#if VDB_UE_5_2
+	virtual void InitRHI() override;
+#else
 	virtual void InitRHI(FRHICommandListBase& RHICmdList) override;
+#endif
 	virtual void ReleaseRHI() override;
 
 	FORCEINLINE uint64 GetCapacity() const { return ByteSize; }

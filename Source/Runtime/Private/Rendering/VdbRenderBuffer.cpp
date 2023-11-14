@@ -24,6 +24,28 @@ void FVdbRenderBuffer::SetData(uint64 InVolumeMemorySize, const uint8* InVolumeG
 	DataPtr = (void*)InVolumeGridData;
 }
 
+#if VDB_UE_5_2
+void FVdbRenderBuffer::InitRHI()
+{
+	check(IsInRenderingThread());
+
+	const uint32 Stride = sizeof(uint32);
+
+	FRHIResourceCreateInfo CreateInfo(TEXT("FVdbRenderBuffer"));
+	Buffer = RHICreateStructuredBuffer(Stride, ByteSize, BUF_Static | BUF_ShaderResource, CreateInfo);
+
+	BufferSRV = RHICreateShaderResourceView(Buffer);
+
+	if (DataPtr)
+	{
+		uint32* BufferMemory = (uint32*)RHILockBuffer(Buffer, 0, ByteSize, RLM_WriteOnly);
+		FMemory::Memcpy(BufferMemory, DataPtr, ByteSize);
+		RHIUnlockBuffer(Buffer);
+	}
+
+	INC_MEMORY_STAT_BY(STAT_VdbGPUDataInterfaceMemory, ByteSize);
+}
+#else
 void FVdbRenderBuffer::InitRHI(FRHICommandListBase& RHICmdList)
 {
 	check(IsInRenderingThread());
@@ -44,6 +66,7 @@ void FVdbRenderBuffer::InitRHI(FRHICommandListBase& RHICmdList)
 
 	INC_MEMORY_STAT_BY(STAT_VdbGPUDataInterfaceMemory, ByteSize);
 }
+#endif
 
 void FVdbRenderBuffer::ReleaseRHI()
 {

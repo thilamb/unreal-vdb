@@ -73,6 +73,15 @@ FVolumeMeshVertexBuffer::FVolumeMeshVertexBuffer()
 	NumVertices = Vertices.Num();
 }
 
+#if VDB_UE_5_2
+void FVolumeMeshVertexBuffer::InitResource()
+{
+	Buffers.PositionVertexBuffer.InitResource();
+	Buffers.StaticMeshVertexBuffer.InitResource();
+	Buffers.ColorVertexBuffer.InitResource();
+	IndexBuffer.InitResource();
+}
+#else
 void FVolumeMeshVertexBuffer::InitResource(FRHICommandListBase& RHICmdList)
 {
 	Buffers.PositionVertexBuffer.InitResource(RHICmdList);
@@ -80,6 +89,7 @@ void FVolumeMeshVertexBuffer::InitResource(FRHICommandListBase& RHICmdList)
 	Buffers.ColorVertexBuffer.InitResource(RHICmdList);
 	IndexBuffer.InitResource(RHICmdList);
 }
+#endif
 
 void FVolumeMeshVertexBuffer::ReleaseResource()
 {
@@ -98,7 +108,11 @@ void FVolumeMeshVertexFactory::Init(FVolumeMeshVertexBuffer* InVertexBuffer)
 	VertexBuffer = InVertexBuffer;
 
 	// Init buffers resources
+#if VDB_UE_5_2
+	VertexBuffer->UpdateRHI();
+#else
 	VertexBuffer->UpdateRHI(FRHICommandListExecutor::GetImmediateCommandList());
+#endif
 
 	// Init vertex factory resources
 	{
@@ -112,7 +126,11 @@ void FVolumeMeshVertexFactory::Init(FVolumeMeshVertexBuffer* InVertexBuffer)
 
 		SetData(VertexData);
 
+#if VDB_UE_5_2
+		InitResource();
+#else
 		InitResource(FRHICommandListExecutor::GetImmediateCommandList());
+#endif
 	}
 }
 
@@ -150,8 +168,16 @@ IMPLEMENT_TYPE_LAYOUT(FVolumeMeshVertexFactoryShaderParameters);
 
 IMPLEMENT_VERTEX_FACTORY_PARAMETER_TYPE(FVolumeMeshVertexFactory, SF_Vertex, FVolumeMeshVertexFactoryShaderParameters);
 
+#if VDB_UE_5_2
+IMPLEMENT_VERTEX_FACTORY_TYPE(FVolumeMeshVertexFactory, "/Plugin/VdbVolume/Private/VolumeVertexFactory_5_2.ush",
+	EVertexFactoryFlags::UsedWithMaterials |
+	EVertexFactoryFlags::SupportsDynamicLighting |
+	EVertexFactoryFlags::SupportsPositionOnly
+);
+#else
 IMPLEMENT_VERTEX_FACTORY_TYPE(FVolumeMeshVertexFactory, "/Plugin/VdbVolume/Private/VolumeVertexFactory.ush",
 	EVertexFactoryFlags::UsedWithMaterials |
 	EVertexFactoryFlags::SupportsDynamicLighting |
 	EVertexFactoryFlags::SupportsPositionOnly
 );
+#endif
