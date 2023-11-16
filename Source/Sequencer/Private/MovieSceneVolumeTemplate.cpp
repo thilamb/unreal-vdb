@@ -106,7 +106,7 @@ struct FVolumeExecutionToken
 						TrackHandler->SetManualTick(ActorComponent, true);
 
 						// calculate the time at which to evaluate the animation
-						float VolumeDuration = TrackHandler->GetAnimationDuration(Params.Volume);
+						float VolumeDuration = Params.Volume ? TrackHandler->GetAnimationDuration(Params.Volume) : 0.0f;
 						float EvalTime = Params.MapTimeToAnimation(VolumeDuration, Context.GetTime(), Context.GetFrameRate());
 						TrackHandler->TickAtThisTime(ActorComponent, EvalTime, Context.GetStatus() == EMovieScenePlayerStatus::Playing, Params.bReverse, true);
 					}
