@@ -28,6 +28,8 @@
 	#include "/Engine/Private/SHCommon.ush"
 	
 	#define LumenGIVolumeStruct VdbParams.LumenGIVolumeStruct
+	#define FrontLayerTranslucencyReflectionsStruct LumenGIVolumeStruct
+	#define RadianceCacheInterpolation LumenGIVolumeStruct
 	#include "/Engine/Private/Lumen/LumenTranslucencyVolumeShared.ush"
 #else
 	#include "/Engine/Private/LightData.ush"

@@ -31,7 +31,7 @@ For convenience, this repository is compatible by default with vanilla versions 
 **But to get all the new features you will need to compile my custom version of Unreal:**
 
 
-1. Download / Clone [my custom version of Unreal](https://github.com/thilamb/UnrealEngine-Modified) (make sure to fetch the [correct branch](https://github.com/thilamb/UnrealEngine-Modified/tree/5.2)).
+1. Download / Clone [my custom version of Unreal](https://github.com/thilamb/UnrealEngine-Modified) (make sure to fetch the [correct branch](https://github.com/thilamb/UnrealEngine-Modified/tree/5.3)).
 2. Download / Clone this repository in the custom Unreal `Engine/Plugins` folder
 3. Open `Source/Runtime/VolumeRuntime.Build.cs` and set `VDB_ENGINE_MODIFICATIONS` and `VDB_CAST_SHADOWS` values to 1
 4. Compile Unreal
@@ -40,7 +40,7 @@ That's it !
 
 Please read
 [how to access Unreal Engine source code on GitHub](https://www.unrealengine.com/en-US/ue-on-github) 
- and [how to compile Unreal](https://github.com/thilamb/UnrealEngine-Modified/tree/5.2#getting-up-and-running).
+ and [how to compile Unreal](https://github.com/thilamb/UnrealEngine-Modified/tree/5.3#getting-up-and-running).
 
 
 ## Disclaimer

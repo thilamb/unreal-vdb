@@ -102,8 +102,16 @@ void SetupRenderPassParameters(
 	}
 	PassParameters->VirtualShadowMapSamplingParameters = Parameters.VirtualShadowMapArray->GetSamplingParameters(GraphBuilder);
 
+
 	// Indirect lighting data
-	VdbParameters->LumenGIVolumeStruct = GetLumenTranslucencyLightingParameters(GraphBuilder, const_cast<FViewInfo*>(ViewInfo)->GetOwnLumenTranslucencyGIVolume(), ViewInfo->LumenFrontLayerTranslucency);
+	VdbParameters->LumenGIVolumeStruct = GetLumenTranslucencyLightingParameters(GraphBuilder, 
+#if VDB_UE_5_2
+		const_cast<FViewInfo*>(ViewInfo)->LumenTranslucencyGIVolume,
+#else
+		const_cast<FViewInfo*>(ViewInfo)->GetOwnLumenTranslucencyGIVolume(), 
+#endif
+		
+		ViewInfo->LumenFrontLayerTranslucency);
 #endif // VDB_ENGINE_MODIFICATIONS
 
 	// Pass params
@@ -187,7 +195,11 @@ void FVdbVolumeRendering::Release()
 void FVdbVolumeRendering::InitVolumeMesh(FRHICommandListImmediate& RHICmdList)
 {
 	VertexBuffer = MakeUnique<FVolumeMeshVertexBuffer>();
+#if VDB_UE_5_2
+	VertexBuffer->InitResource();
+#else
 	VertexBuffer->InitResource(RHICmdList);
+#endif
 }
 
 void FVdbVolumeRendering::InitVertexFactory()
@@ -871,14 +883,12 @@ void FVdbVolumeRendering::RenderLight(
 
 					FTexture* CurveAtlas = Proxy->GetBlackbodyAtlasResource();
 					FTextureRHIRef CurveAtlasRHI = CurveAtlas ? CurveAtlas->GetTextureRHI() : nullptr;
-					if (CurveAtlasRHI)
-					{
-						ShaderElementData.BlackbodyColorSRV = TexCache.GetOrCreateSRV(RHICmdList, CurveAtlasRHI, FRHITextureSRVCreateInfo());
-					}
-					else
-					{
-						ShaderElementData.BlackbodyColorSRV = GBlackTextureWithSRV->ShaderResourceViewRHI;
-					}
+
+#if VDB_UE_5_2
+					ShaderElementData.BlackbodyColorSRV = CurveAtlasRHI ? TexCache.GetOrCreateSRV(CurveAtlasRHI, FRHITextureSRVCreateInfo()) : GBlackTextureWithSRV->ShaderResourceViewRHI;
+#else
+					ShaderElementData.BlackbodyColorSRV = CurveAtlasRHI ? TexCache.GetOrCreateSRV(RHICmdList, CurveAtlasRHI, FRHITextureSRVCreateInfo()) : GBlackTextureWithSRV->ShaderResourceViewRHI;
+#endif
 
 					FVdbMeshProcessor PassMeshProcessor(
 						InView.Family->Scene->GetRenderScene(),

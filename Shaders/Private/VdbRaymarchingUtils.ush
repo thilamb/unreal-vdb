@@ -16,6 +16,8 @@
 #ifndef D_VDB_RAYMARCHING_UTILS
 #define D_VDB_RAYMARCHING_UTILS
 
+#include "/Engine/Private/LightData.ush"
+#include "/Engine/Private/DeferredLightingCommon.ush"
 #include "/Plugin/VdbVolume/Private/VdbCommon.ush"
 #include "/Plugin/VdbVolume/Private/VdbMaterial.ush"
 
