@@ -96,6 +96,9 @@ float3 GetTransmittance(
 	float3 pos, // index space
 	float3 dir, // index space
 	VdbSampler Sampler,
+#if USE_VELOCITY_VDB
+	VdbSampler VelocitySampler,
+#endif
 	float StepMultiplier,
 	float4x4 LocalToWorld,
 	float Threshold,
@@ -147,6 +150,11 @@ float3 GetTransmittance(
 		half3 Displacement = SampleDisplacement(PixelMaterialInputs);
 		half3 SigmaT = SampleScattering(PixelMaterialInputs);
 		float2 DensityModifications = SampleDensityModifications(PixelMaterialInputs);
+		
+#if USE_VELOCITY_VDB
+		float3 Velocity = ReadValueVec3f(iPos, VelocitySampler.GridBuffer, VelocitySampler.GridType, VelocitySampler.Accessor) * VELOCITY_MULT / VOXEL_SIZE;
+		Displacement += Velocity * SUB_FRAME;
+#endif
 
 		float Density = ReadValue(iPos - Displacement, Sampler.GridBuffer, Sampler.GridType, Sampler.Accessor);
 #if LEVEL_SET
@@ -174,6 +182,9 @@ float3 GetTransmittance(
 
 float3 GetInscattering(
 	VdbSampler Sampler,
+#if USE_VELOCITY_VDB
+	VdbSampler VelocitySampler,
+#endif
 	float StepMultiplier,
 	float Threshold,
 	float4x4 LocalToWorld,
@@ -232,6 +243,9 @@ float3 GetInscattering(
 		Inscattering *= GetTransmittance(
 			LocalPosition, LocalDirLight,
 			Sampler,
+#if USE_VELOCITY_VDB
+			VelocitySampler,
+#endif
 			StepMultiplier,
 			LocalToWorld, Threshold, RandSequence, Dummy, MaterialParameters);
 		if (!COLORED_TRANSMITTANCE)

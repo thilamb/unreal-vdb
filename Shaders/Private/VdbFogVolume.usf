@@ -258,6 +258,9 @@ float4 RaymarchFogVolume(
 		{
 			float3 ShadowTransmittance = GetInscattering(
 				DensitySampler,
+#if USE_VELOCITY_VDB
+				VelocitySampler,
+#endif
 				SHADOW_STEP_SIZE_MULT,
 				VdbParams.Threshold,
 				LocalToWorld, WorldToLocal,
@@ -281,6 +284,9 @@ float4 RaymarchFogVolume(
 			float3 ShadowTransmittance = GetTransmittance(
 				LocalPosition, ShadowDirection,
 				DensitySampler,
+		#if USE_VELOCITY_VDB
+				VelocitySampler,
+		#endif
 				2.0 * SHADOW_STEP_SIZE_MULT,
 				LocalToWorld, VdbParams.Threshold, RandSequence, MinDistLocal, MaterialParameters);
 			if (!COLORED_TRANSMITTANCE)
