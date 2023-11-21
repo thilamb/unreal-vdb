@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define SUPPORT_CONTACT_SHADOWS 0
+
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/Random.ush"
 #include "/Engine/Private/ReflectionEnvironmentShared.ush"
 #include "/Engine/Generated/Material.ush"
 #include "/Engine/Generated/VertexFactory.ush"
-
-#define SUPPORT_CONTACT_SHADOWS 0
 
 #if VDB_ENGINE_MODIFICATIONS
 	#define DeferredLightUniforms VdbParams.DeferredLight

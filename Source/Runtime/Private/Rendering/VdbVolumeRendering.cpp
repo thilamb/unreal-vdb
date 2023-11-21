@@ -885,9 +885,23 @@ void FVdbVolumeRendering::RenderLight(
 					FTextureRHIRef CurveAtlasRHI = CurveAtlas ? CurveAtlas->GetTextureRHI() : nullptr;
 
 #if VDB_UE_5_2
-					ShaderElementData.BlackbodyColorSRV = CurveAtlasRHI ? TexCache.GetOrCreateSRV(CurveAtlasRHI, FRHITextureSRVCreateInfo()) : GBlackTextureWithSRV->ShaderResourceViewRHI;
+					if (CurveAtlasRHI)
+					{
+						ShaderElementData.BlackbodyColorSRV = TexCache.GetOrCreateSRV(CurveAtlasRHI, FRHITextureSRVCreateInfo());
+					}
+					else
+					{
+						ShaderElementData.BlackbodyColorSRV =  GBlackTextureWithSRV->ShaderResourceViewRHI;
+					}
 #else
-					ShaderElementData.BlackbodyColorSRV = CurveAtlasRHI ? TexCache.GetOrCreateSRV(RHICmdList, CurveAtlasRHI, FRHITextureSRVCreateInfo()) : GBlackTextureWithSRV->ShaderResourceViewRHI;
+					if (CurveAtlasRHI)
+					{
+						ShaderElementData.BlackbodyColorSRV = TexCache.GetOrCreateSRV(RHICmdList, CurveAtlasRHI, FRHITextureSRVCreateInfo());
+					}
+					else
+					{
+						ShaderElementData.BlackbodyColorSRV = GBlackTextureWithSRV->ShaderResourceViewRHI;
+					}
 #endif
 
 					FVdbMeshProcessor PassMeshProcessor(

@@ -16,6 +16,8 @@
 #define SHADOW_DEPTH_SHADER 1
 #define USE_STENCIL_LOD_DITHER	0
 
+#define SUPPORT_CONTACT_SHADOWS 0
+
 #ifndef ENABLE_NON_NANITE_VSM
 	#error "ENABLE_NON_NANITE_VSM should be defined to either 0 or 1!"
 #endif

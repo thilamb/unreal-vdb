@@ -14,6 +14,7 @@
 
 // needs to before Common.usf
 #define SPHERICAL_OPACITY_FOR_SHADOW_DEPTHS 1
+#define SUPPORT_CONTACT_SHADOWS 0
 
 #define SCENE_TEXTURES_DISABLED 1
 
