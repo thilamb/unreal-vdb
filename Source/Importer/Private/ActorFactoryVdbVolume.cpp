@@ -59,14 +59,3 @@ void UActorFactoryVdbVolume::PostSpawnActor(UObject* Asset, AActor* NewActor)
 	VdbActor->UnregisterAllComponents();
 	VdbActor->RegisterAllComponents();
 }
-
-void UActorFactoryVdbVolume::PostCreateBlueprint(UObject* Asset, AActor* CDO)
-{
-	if (Asset != NULL && CDO != NULL)
-	{
-		UVdbVolumeAsset* VdbAsset = CastChecked<UVdbVolumeAsset>(Asset);
-		AVdbVolumeActor* VdbActor = CastChecked<AVdbVolumeActor>(CDO);
-		UVdbAssetComponent* VdbAssetComponent = VdbActor->GetVdbAssetComponent();
-		VdbAssetComponent->VdbAsset = VdbAsset;
-	}
-}

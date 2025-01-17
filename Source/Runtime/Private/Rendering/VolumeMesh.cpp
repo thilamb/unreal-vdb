@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "VolumeMesh.h"
-#include "LocalVertexFactory.h"
 #include "DynamicMeshBuilder.h"
+#include "LocalVertexFactory.h"
+#include "MeshDrawShaderBindings.h"
 
 FVolumeMeshVertexBuffer::FVolumeMeshVertexBuffer()
 {
@@ -124,7 +125,7 @@ void FVolumeMeshVertexFactory::Init(FVolumeMeshVertexBuffer* InVertexBuffer)
 		Buffers.StaticMeshVertexBuffer.BindLightMapVertexBuffer(this, VertexData, 0);
 		Buffers.ColorVertexBuffer.BindColorVertexBuffer(this, VertexData);
 
-		SetData(VertexData);
+		SetData(FRHICommandListImmediate::Get(), VertexData);
 
 #if VDB_UE_5_2
 		InitResource();

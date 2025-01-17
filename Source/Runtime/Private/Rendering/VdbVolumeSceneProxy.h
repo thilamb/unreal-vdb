@@ -16,11 +16,15 @@
 
 #include "CoreMinimal.h"
 #include "VdbCommon.h"
+#include "Rendering/VolumeMesh.h"
+
+#include "Misc/SpinLock.h"
 #include "PrimitiveSceneProxy.h"
 
 class UVdbAssetComponent;
 class UVdbMaterialComponent;
 class FVdbRenderBuffer;
+class FVdbVolumeRendering;
 
 // Render Thread equivalent of VdbMaterialComponent
 class FVdbVolumeSceneProxy : public FPrimitiveSceneProxy
@@ -70,13 +74,13 @@ public:
 
 protected:
 	virtual SIZE_T GetTypeHash() const override;
-	virtual void CreateRenderThreadResources() override;
+	virtual void CreateRenderThreadResources(FRHICommandListBase& RHICmdList) override;
 	virtual void DestroyRenderThreadResources() override;
 	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
 	virtual uint32 GetMemoryFootprint() const override { return(sizeof(*this) + GetAllocatedSize()); }
 	//~ End FPrimitiveSceneProxy Interface
 
-	FMeshBatch* CreateMeshBatch(const FSceneView* View, int32 ViewIndex, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector, FVdbVolumeRendering* VolRendering, struct FVdbVertexFactoryUserDataWrapper& UserData, const FMaterialRenderProxy* MaterialProxy) const;
+	FMeshBatch* CreateMeshBatch(const FSceneView* View, int32 ViewIndex, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector, FVdbVolumeRendering* VolRendering, const FMaterialRenderProxy* MaterialProxy) const;
 
 private:
 	
@@ -120,7 +124,10 @@ private:
 
 	mutable TArray<const FSceneView*> VisibleViews;
 	mutable TMap<const FSceneView*, FMeshBatch*> MeshBatchPerView;
+	mutable UE::FSpinLock ContainerLock;
 
 	// For path-tracing accumulation only
 	TRefCountPtr<IPooledRenderTarget> OffscreenRenderTarget[2];
+
+	FVdbVertexFactoryUserDataWrapper VdbUserData;
 };

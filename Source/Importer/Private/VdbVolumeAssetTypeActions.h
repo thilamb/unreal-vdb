@@ -19,6 +19,7 @@
 #include "AssetTypeActions_Base.h"
 
 class UVdbVolumeAsset;
+class UVdbVolumeBase;
 
 class FVdbVolumeAssetTypeActions : public FAssetTypeActions_Base
 {

@@ -14,6 +14,7 @@
 
 #include "VdbToVolumeTextureFactory.h"
 #include "VdbVolumeStatic.h"
+#include "VdbVolumeSequence.h"
 
 #include "Styling/SlateBrush.h"
 #include "Brushes/SlateDynamicImageBrush.h"

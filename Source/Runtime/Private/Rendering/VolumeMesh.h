@@ -17,6 +17,7 @@
 #include "CoreMinimal.h"
 #include "RenderResource.h"
 #include "StaticMeshResources.h"
+#include "MaterialDomain.h"
 #include "MeshMaterialShader.h"
 
 // Unit cube (0, 0, 0) -> (1, 1, 1), to be scaled when rendering using VolumeMeshVertexFactory
@@ -66,7 +67,7 @@ public:
 		bool Cond = 
 			Super::ShouldCompilePermutation(Parameters) &&
 			IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5) &&
-			Parameters.MaterialParameters.MaterialDomain == MD_Volume &&
+			Parameters.MaterialParameters.MaterialDomain == EMaterialDomain::MD_Volume &&
 			IsPCPlatform(Parameters.Platform);
 
 		return Cond || Parameters.MaterialParameters.bIsSpecialEngineMaterial;

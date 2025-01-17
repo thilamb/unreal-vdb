@@ -73,7 +73,7 @@ class VOLUMERUNTIME_API UVdbAssetComponent : public UActorComponent
 	void GetReferencedContentObjects(TArray<UObject*>& Objects) const;
 
 	EVdbClass GetVdbClass() const;
-	const FVolumeRenderInfos* GetRenderInfos(const UVdbVolumeBase* VdbVolumeStatic) const;
+	const FVolumeRenderInfos* GetRenderInfos(const UVdbVolumeBase* VdbVolume) const;
 
 	const UVdbVolumeBase* GetMainVolume() const;
 

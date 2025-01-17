@@ -50,7 +50,7 @@ public:
 	virtual void PostLoad() override;
 
 #if WITH_EDITORONLY_DATA
-	virtual void GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) const override;
+	virtual void GetAssetRegistryTags(FAssetRegistryTagsContext Context) const override;
 
 	class UAssetImportData* GetAssetImportData() { return AssetImportData; }
 

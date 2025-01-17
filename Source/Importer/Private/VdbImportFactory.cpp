@@ -302,7 +302,7 @@ UObject* UVdbImportFactory::FactoryCreateFile(UClass* InClass, UObject* InParent
 		}
 		else
 		{
-			// Import as volume. All grids can be imported
+			// Import as single frame static volume. All grids can be imported
 			for (FVdbGridInfoPtr GridInfo : GridsInfo)
 			{
 				if (GridInfo->ShouldImport)

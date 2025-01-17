@@ -60,7 +60,7 @@ public:
 		EMeshPass::Type InMeshPassTargetType,
 		bool IsLevelSet,
 		FVdbShadowDepthShaderElementData&& ShaderElementData)
-		: FMeshPassProcessor(Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
+		: FMeshPassProcessor(TEXT("VDB Depth"), Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
 		, VdbShaderElementData(ShaderElementData)
 		, FeatureLevel(Scene->GetFeatureLevel())
 		, ShadowDepthType(InShadowDepthType)
@@ -258,7 +258,7 @@ private:
 };
 
 //-----------------------------------------------------------------------------
-//--- FVdbTrasnlucentDepthMeshProcessor
+//--- FVdbTranslucentDepthMeshProcessor
 //-----------------------------------------------------------------------------
 
 class FVdbTranslucentDepthMeshProcessor : public FMeshPassProcessor
@@ -270,7 +270,7 @@ public:
 		FMeshPassDrawListContext* InDrawListContext,
 		const FProjectedShadowInfo* InShadowInfo,
 		FVdbShadowDepthShaderElementData&& ShaderElementData)
-		: FMeshPassProcessor(Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
+		: FMeshPassProcessor(TEXT("VDB Translucency Depth"), Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
 		, VdbShaderElementData(ShaderElementData)
 		, FeatureLevel(Scene->GetFeatureLevel())
 		, ShadowInfo(InShadowInfo)
@@ -385,7 +385,7 @@ public:
 		bool FirstLight,
 		bool UseTempVdb, bool UseVelVdb, bool UseColorVdb,
 		FVdbElementData&& ShaderElementData)
-		: FMeshPassProcessor(Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
+		: FMeshPassProcessor(TEXT("VDB Main"), Scene, Scene->GetFeatureLevel(), InView, InDrawListContext)
 		, VdbShaderElementData(ShaderElementData)
 		, bLevelSet(IsLevelSet)
 		, bTranslucentLevelSet(IsTranslucentLevelSet)

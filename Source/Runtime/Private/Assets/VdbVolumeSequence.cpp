@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include "VdbVolumeSequence.h"
-#include "VdbCustomVersion.h"
+#include "Misc/VdbCustomVersion.h"
+#include "Rendering/VdbRenderBuffer.h"
+#include "Rendering/VdbRenderBufferPool.h"
 #include "VdbCommon.h"
 #include "VdbSequenceComponent.h"
 #include "VolumeStreamingManager.h"
-#include "Rendering/VdbRenderBuffer.h"
-#include "Rendering/VdbRenderBufferPool.h"
 
 #include "RenderingThread.h"
 #include "EditorFramework/AssetImportData.h"

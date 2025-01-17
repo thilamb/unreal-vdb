@@ -16,7 +16,7 @@
 
 #include "VdbCommon.h"
 #include "Rendering/VdbRenderBuffer.h"
-#include "VdbVolumeStatic.h"
+//#include "VdbVolumeStatic.h"
 #include "VdbVolumeSequence.h"
 #include "VdbAssetComponent.h"
 #include "VdbSequenceComponent.h"

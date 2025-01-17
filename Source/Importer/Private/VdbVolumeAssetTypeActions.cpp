@@ -16,6 +16,7 @@
 #include "VdbVolumeAsset.h"
 #include "VdbAssetComponent.h"
 #include "VdbVolumeBase.h"
+#include "VdbVolumeSequence.h"
 #include "VdbToVolumeTextureFactory.h"
 
 #include "EditorFramework/AssetImportData.h"
@@ -24,7 +25,6 @@
 #include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
 #include "UObject/ConstructorHelpers.h"
-
 #include "Widgets/SWidget.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 

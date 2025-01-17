@@ -1,5 +1,5 @@
-// Copyright 2022 Eidos-Montreal / Eidos-Sherbrooke
 
+// Copyright 2022 Eidos-Montreal / Eidos-Sherbrooke
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include "VdbVolumeStatic.h"
-#include "VdbCustomVersion.h"
-#include "VdbCommon.h"
+#include "Misc/VdbCustomVersion.h"
 #include "Rendering/VdbRenderBuffer.h"
+#include "VdbCommon.h"
 
 #include "RenderingThread.h"
 #include "EditorFramework\AssetImportData.h"

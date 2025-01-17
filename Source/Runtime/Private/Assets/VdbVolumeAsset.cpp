@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include "VdbVolumeAsset.h"
+#include "VdbVolumeBase.h"
+
 #include "EditorFramework\AssetImportData.h"
 
 UVdbVolumeAsset::UVdbVolumeAsset(const FObjectInitializer& ObjectInitializer)
@@ -49,13 +51,13 @@ void UVdbVolumeAsset::PostLoad()
 }
 
 #if WITH_EDITORONLY_DATA
-void UVdbVolumeAsset::GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) const
+void UVdbVolumeAsset::GetAssetRegistryTags(FAssetRegistryTagsContext Context) const
 {
 	if (AssetImportData)
 	{
-		OutTags.Add(FAssetRegistryTag(SourceFileTagName(), AssetImportData->GetSourceData().ToJson(), FAssetRegistryTag::TT_Hidden));
+		Context.AddTag(FAssetRegistryTag(SourceFileTagName(), AssetImportData->GetSourceData().ToJson(), FAssetRegistryTag::TT_Hidden));
 	}
 
-	Super::GetAssetRegistryTags(OutTags);
+	Super::GetAssetRegistryTags(Context);
 }
 #endif

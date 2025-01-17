@@ -52,10 +52,11 @@ static TAutoConsoleVariable<int32> CVar_VdbSeq_NbFramesToCacheBeforeStartingAnim
 UVdbSequenceComponent::UVdbSequenceComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	PrimaryComponentTick.bCanEverTick = true;
 }
 
-UVdbSequenceComponent::~UVdbSequenceComponent() {}
+UVdbSequenceComponent::~UVdbSequenceComponent() 
+{
+}
 
 
 void UVdbSequenceComponent::SetVdbAssets(UVdbAssetComponent* Component)
@@ -135,6 +136,7 @@ void UVdbSequenceComponent::OnRegister()
 		Duration = 0.f;
 		FrameRate = 30.0;
 	}
+	PrimaryComponentTick.bCanEverTick = Duration != 0.f;
 
 	if (VdbAssets)
 	{

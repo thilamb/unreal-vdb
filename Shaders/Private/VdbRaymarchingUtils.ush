@@ -136,7 +136,7 @@ float3 GetTransmittance(
 
 		// Update coordinates
 		float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, Sampler.GridBuffer, Sampler.Grid);
-		float3 TranslatedWorldPos = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
+		float3 TranslatedWorldPos = DFFastAddDemote(WorldPos, PrimaryView.PreViewTranslation);
 
 		float4 ClipPos = mul(float4(TranslatedWorldPos, 1.0), PrimaryView.TranslatedWorldToClip);
 		float4 SvPosition = ClipPos / ClipPos.w;

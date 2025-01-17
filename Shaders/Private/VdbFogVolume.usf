@@ -167,7 +167,7 @@ float4 RaymarchFogVolume(
 
 		float3 LocalPosition = pnanovdb_hdda_ray_start(Ray.Origin, LocalDist, Ray.Direction);
 		float3 WorldPos = IndexToWorldPosition(LocalPosition, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
-		float3 TranslatedWorldPos = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
+		float3 TranslatedWorldPos = DFFastAddDemote(WorldPos, PrimaryView.PreViewTranslation);
 
 		// ------------------------------------------------------------------------
 		// Sample material
@@ -343,7 +343,7 @@ float4 RaymarchFogVolume(
 		// Re-doing computation at the end to avoid weird issue when trilinear sampling is enabled.
 		pnanovdb_vec3_t LocalPosition = pnanovdb_hdda_ray_start(Ray.Origin, MinDistLocal, Ray.Direction);
 		float3 WorldPos = IndexToWorldPosition(LocalPosition, LocalToWorld, DensitySampler.GridBuffer, DensitySampler.Grid);
-		FirstIntersection = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
+		FirstIntersection = DFFastAddDemote(WorldPos, PrimaryView.PreViewTranslation);
 	}
 	
 	return float4(Radiance, 1.0 - Average(Transmittance));

@@ -852,7 +852,7 @@ void FVdbVolumeRendering::RenderLight(
 		ERDGPassFlags::Raster,
 		[this, &InView = *View, ViewportRect = Parameters.ViewportRect, Proxy, bWriteDepth, LightSceneInfo, FirstLight = ApplyEmissionAndTransmittance](FRHICommandListImmediate& RHICmdList)
 		{
-			SCOPED_DRAW_EVENTF(RHICmdList, StatVdbVolume, TEXT("VDB (main pass) %s, Light %s"), *Proxy->GetOwnerName().ToString(), LightSceneInfo ? *LightSceneInfo->Proxy->GetOwnerNameOrLabel() : *FString(""));
+			SCOPED_DRAW_EVENTF(RHICmdList, StatVdbVolume, TEXT("VDB (main pass) %s, Light %s"), Proxy->GetOwnerName(), LightSceneInfo ? LightSceneInfo->Proxy->GetOwnerNameOrLabel() : TEXT(""));
 			SCOPED_GPU_STAT(RHICmdList, StatVdbVolume);
 
 			RHICmdList.SetViewport(ViewportRect.Min.X, ViewportRect.Min.Y, 0.0f, ViewportRect.Max.X, ViewportRect.Max.Y, 1.0f);
@@ -916,11 +916,6 @@ void FVdbVolumeRendering::RenderLight(
 						ShaderElementData.VelocityBufferSRV != nullptr,
 						ShaderElementData.ColorBufferSRV != nullptr,
 						MoveTemp(ShaderElementData));
-
-					FVdbVertexFactoryUserDataWrapper UserData;
-					UserData.Data.IndexMin = Proxy->GetIndexMin() - ShaderElementData.CustomFloatData2.Y;
-					UserData.Data.IndexSize = Proxy->GetIndexSize() + 2.0 * ShaderElementData.CustomFloatData2.Y;
-					UserData.Data.IndexToLocal = Proxy->GetIndexToLocal();
 
 					if (FMeshBatch* VolumeMesh = Proxy->GetMeshFromView(&InView))
 					{

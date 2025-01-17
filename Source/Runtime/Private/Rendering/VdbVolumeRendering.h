@@ -102,7 +102,7 @@ private:
 		bool ApplyShadowTransmittance,
 		uint32 LightType,
 		FLightSceneInfo* LightSceneInfo,
-		const FVisibleLightInfo* VisibleLightInfo,
+		const class FVisibleLightInfo* VisibleLightInfo,
 		// Scene data
 		const FPostOpaqueRenderParameters& Parameters,
 		const SVdbPathtrace& VdbPathtrace,

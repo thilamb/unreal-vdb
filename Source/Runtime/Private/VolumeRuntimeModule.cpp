@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include "VolumeRuntimeModule.h"
-#include "VdbCommon.h"
-#include "VdbAssetComponentDetailsCustomization.h"
+#include "Actors/VdbAssetComponentDetailsCustomization.h"
 #include "Rendering/VdbVolumeRendering.h"
+#include "VdbCommon.h"
 
 #include "Interfaces/IPluginManager.h"
 #include "ShaderCore.h"

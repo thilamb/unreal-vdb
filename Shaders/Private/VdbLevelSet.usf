@@ -106,7 +106,7 @@ float4 RaymarchLevelSet(
 
 		// Update coordinates
 		float3 WorldPos = IndexToWorldPosition(iPos, LocalToWorld, VdbSampler.GridBuffer, VdbSampler.Grid);
-		float3 TranslatedWorldPos = LWCToFloat(LWCAdd(WorldPos, PrimaryView.PreViewTranslation));
+		float3 TranslatedWorldPos = DFFastAddDemote(WorldPos, PrimaryView.PreViewTranslation);
 
 		CalcMaterialParametersEx(
 			MaterialParameters, PixelMaterialInputs,

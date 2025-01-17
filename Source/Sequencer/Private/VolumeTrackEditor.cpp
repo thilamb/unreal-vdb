@@ -43,6 +43,7 @@
 #include "Styling/SlateIconFinder.h"
 #include "LevelSequence.h"
 #include "VolumeSequencerCommon.h"
+#include "TimeToPixel.h"
 
 #define LOCTEXT_NAMESPACE "FVolumeTrackEditor"
 

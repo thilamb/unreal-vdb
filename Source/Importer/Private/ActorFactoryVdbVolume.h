@@ -31,5 +31,4 @@ class UActorFactoryVdbVolume : public UActorFactory
 	// UActorFactory Interface
 	virtual bool CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg) override;
 	virtual void PostSpawnActor(UObject* Asset, AActor* NewActor) override;
-	virtual void PostCreateBlueprint(UObject* Asset, AActor* CDO) override;	
 };

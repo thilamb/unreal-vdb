@@ -192,7 +192,6 @@ void SVdbImporterWindow::Construct(const FArguments& InArgs)
 				.MinDesiredWidth(512.0f)
 				[
 					SNew(SListView<FVdbGridInfoPtr>)
-					.ItemHeight(24)
 					.ScrollbarVisibility(EVisibility::Visible)
 					.ListItemsSource(&VdbGridsInfo)
 					.OnMouseButtonDoubleClick(this, &SVdbImporterWindow::OnItemDoubleClicked)

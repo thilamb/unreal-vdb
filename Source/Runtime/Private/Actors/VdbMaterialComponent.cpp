@@ -1,4 +1,4 @@
-// Copyright 2022 Eidos-Montreal / Eidos-Sherbrooke
+// Copyright Thibault Lambert
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,12 @@
 #include "VdbVolumeSequence.h"
 #include "VdbAssetComponent.h"
 #include "Rendering/VdbVolumeSceneProxy.h"
-#include "Curves/CurveLinearColorAtlas.h"
 
-#include "UObject/ConstructorHelpers.h"
+#include "Curves/CurveLinearColorAtlas.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInterface.h"
+#include "MaterialDomain.h"
+#include "UObject/ConstructorHelpers.h"
 
 #define LOCTEXT_NAMESPACE "VdbMaterialComponent"
 
@@ -60,7 +62,7 @@ FPrimitiveSceneProxy* UVdbMaterialComponent::CreateSceneProxy()
 		return nullptr;
 
 	UMaterialInterface* VdbMaterial = GetMaterial(0);
-	if (!VdbMaterial || VdbMaterial->GetMaterial()->MaterialDomain != MD_Volume)
+	if (!VdbMaterial || VdbMaterial->GetMaterial()->MaterialDomain != EMaterialDomain::MD_Volume)
 	{
 		UE_LOG(LogSparseVolumetrics, Warning, TEXT("VDB %s needs a Volumetric Material."), *GetName());
 		return nullptr;

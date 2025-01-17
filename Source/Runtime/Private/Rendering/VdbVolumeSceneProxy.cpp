@@ -15,16 +15,18 @@
 #include "VdbVolumeSceneProxy.h"
 #include "VdbAssetComponent.h"
 #include "VdbMaterialComponent.h"
-#include "VdbVolumeStatic.h"
 #include "VdbCommon.h"
 #include "VolumeRuntimeModule.h"
 #include "VdbSequenceComponent.h"
 #include "VdbVolumeSequence.h"
 #include "Rendering/VolumeMesh.h"
 #include "Rendering/VdbVolumeRendering.h"
+
 #include "Materials/Material.h"
 #include "Algo/AnyOf.h"
 #include "Curves/CurveLinearColorAtlas.h"
+#include "RenderGraphBuilder.h"
+#include "RenderTargetPool.h"
 #include "TextureResource.h"
 
 FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetComponent, const UVdbMaterialComponent* InComponent)
@@ -52,6 +54,10 @@ FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetCompon
 	IndexSize = PrimaryRenderInfos->GetIndexSize();
 	IndexToLocal = PrimaryRenderInfos->GetIndexToLocal();
 	IndexToLocalDeterminantNegative = IndexToLocal.Determinant() < 0.0f;
+
+	VdbUserData.Data.IndexMin = GetIndexMin();
+	VdbUserData.Data.IndexSize = GetIndexSize();
+	VdbUserData.Data.IndexToLocal = GetIndexToLocal();
 
 	SliceMinData = FVector4f(FMath::Max(0.0, InComponent->SliceMin.X), FMath::Max(0.0, InComponent->SliceMin.Y), FMath::Max(0.0, InComponent->SliceMin.Z));
 	SliceMinData = FVector4f(FMath::Min(1.0, SliceMinData.X), FMath::Min(1.0, SliceMinData.Y), FMath::Min(1.0, SliceMinData.Z));
@@ -92,7 +98,7 @@ FVdbVolumeSceneProxy::FVdbVolumeSceneProxy(const UVdbAssetComponent* AssetCompon
 	bCastDynamicShadow = true;
 }
 
-FMeshBatch* FVdbVolumeSceneProxy::CreateMeshBatch(const FSceneView* View, int32 ViewIndex, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector, FVdbVolumeRendering* VolRendering, FVdbVertexFactoryUserDataWrapper& UserData, const FMaterialRenderProxy* MaterialProxy) const
+FMeshBatch* FVdbVolumeSceneProxy::CreateMeshBatch(const FSceneView* View, int32 ViewIndex, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector, FVdbVolumeRendering* VolRendering, const FMaterialRenderProxy* MaterialProxy) const
 {
 	FVolumeMeshVertexBuffer* VertexBuffer = VolRendering->GetVertexBuffer();
 	FVolumeMeshVertexFactory* VertexFactory = VolRendering->GetVertexFactory();
@@ -131,7 +137,7 @@ FMeshBatch* FVdbVolumeSceneProxy::CreateMeshBatch(const FSceneView* View, int32 
 	BatchElement.MaxVertexIndex = VertexBuffer->NumVertices - 1;
 	BatchElement.NumPrimitives = VertexBuffer->NumPrimitives;
 	BatchElement.VertexFactoryUserData = VertexFactory->GetUniformBuffer();
-	BatchElement.UserData = &UserData;
+	BatchElement.UserData = &VdbUserData;
 
 	Collector.AddMesh(ViewIndex, MeshBatch);
 
@@ -143,26 +149,23 @@ FMeshBatch* FVdbVolumeSceneProxy::CreateMeshBatch(const FSceneView* View, int32 
 void FVdbVolumeSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
 {
 	SCOPE_CYCLE_COUNTER(STAT_VdbSceneProxy_GetDynamicMeshElements);
-	check(IsInRenderingThread());
 
-	if (!Material || Material->GetMaterial()->MaterialDomain != MD_Volume)
+	if (!VdbMaterialRenderExtension->ShouldRenderVolumetricVdb() || !Material)
 		return;
 
 	for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
 	{
 		const FSceneView* View = Views[ViewIndex];
 
-		if (IsShown(View) && (VisibilityMap & (1 << ViewIndex)) && VdbMaterialRenderExtension->ShouldRenderVolumetricVdb())
+		if (IsShown(View) && (VisibilityMap & (1 << ViewIndex)))
 		{
 			VisibleViews.Add(View);
 
-			FVdbVertexFactoryUserDataWrapper& UserData = Collector.AllocateOneFrameResource<FVdbVertexFactoryUserDataWrapper>();
-			UserData.Data.IndexMin = GetIndexMin();
-			UserData.Data.IndexSize = GetIndexSize();
-			UserData.Data.IndexToLocal = GetIndexToLocal();
-
-			FMeshBatch* Mesh = CreateMeshBatch(View, ViewIndex, ViewFamily, Collector, VdbMaterialRenderExtension.Get(), UserData, Material->GetRenderProxy());
-			MeshBatchPerView.Add(View, Mesh);
+			FMeshBatch* Mesh = CreateMeshBatch(View, ViewIndex, ViewFamily, Collector, VdbMaterialRenderExtension.Get(), Material->GetRenderProxy());
+			{
+				UE::TScopeLock<UE::FSpinLock> ScopeLock(ContainerLock);
+				MeshBatchPerView.Add(View, Mesh);
+			}
 
 			{
 				FPrimitiveDrawInterface* PDI = Collector.GetPDI(ViewIndex);
@@ -200,9 +203,9 @@ SIZE_T FVdbVolumeSceneProxy::GetTypeHash() const
 	return reinterpret_cast<size_t>(&UniquePointer);
 }
 
-void FVdbVolumeSceneProxy::CreateRenderThreadResources()
+void FVdbVolumeSceneProxy::CreateRenderThreadResources(FRHICommandListBase& RHICmdList)
 {
-	FPrimitiveSceneProxy::CreateRenderThreadResources();
+	FPrimitiveSceneProxy::CreateRenderThreadResources(RHICmdList);
 
 	VdbMaterialRenderExtension->AddVdbProxy(this);
 }

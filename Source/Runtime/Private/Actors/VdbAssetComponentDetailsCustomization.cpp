@@ -16,6 +16,8 @@
 
 #include "VdbAssetComponentDetailsCustomization.h"
 #include "VdbAssetComponent.h"
+#include "VdbVolumeAsset.h"
+#include "VdbVolumeBase.h"
 
 #include "Widgets/SWidget.h"
 #include "DetailLayoutBuilder.h"
@@ -220,7 +222,7 @@ void FVdbAssetComponentDetails::CustomizeDetails(IDetailLayoutBuilder& DetailBui
 				SNew(SBox)
 				[
 					SNew(SListView<TSharedPtr<SNameType>>)
-					.ItemHeight(24)
+					//.ItemHeight(24)
 					.ListItemsSource(&GridNamesTypes)
 					.OnGenerateRow(this, &FVdbAssetComponentDetails::HandleGenerateRowList)
 					.HeaderRow
