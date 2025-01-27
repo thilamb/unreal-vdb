@@ -22,6 +22,7 @@
 
 #include "Curves/CurveLinearColorAtlas.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
 #include "MaterialDomain.h"
 #include "UObject/ConstructorHelpers.h"

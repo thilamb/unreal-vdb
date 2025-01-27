@@ -16,6 +16,7 @@
 
 #include "CoreMinimal.h"
 #include "RenderResource.h"
+#include "RHIResources.h"
 
 class FVdbRenderBuffer : public FRenderResource, public FRefCountedObject
 {

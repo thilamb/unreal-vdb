@@ -17,6 +17,7 @@
 #include "CoreMinimal.h"
 #include "RenderResource.h"
 #include "VdbRenderBuffer.h"
+#include "Containers/Queue.h"
 
 typedef TRefCountPtr<FVdbRenderBuffer> FVdbRenderBufferPtr;
 

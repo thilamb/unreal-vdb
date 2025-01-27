@@ -19,9 +19,11 @@
 #include "SceneViewExtension.h"
 #include "VdbDenoiser.h"
 
+class FLightSceneInfo;
 class FVdbVolumeSceneProxy;
 class FVolumeMeshVertexBuffer;
 class FVolumeMeshVertexFactory;
+class UTextureRenderTarget2D;
 
 class FVdbVolumeRendering : public FSceneViewExtensionBase
 {

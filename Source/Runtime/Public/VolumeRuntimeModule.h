@@ -18,6 +18,8 @@
 #include "Modules/ModuleManager.h"
 #include "VdbVolumeSequenceTrackHandler.h"
 
+class UTextureRenderTarget2D;
+
 class FVolumeRuntimeModule : public IModuleInterface
 {
 	typedef TSharedPtr<class FVdbVolumeRendering, ESPMode::ThreadSafe> TRenderExtensionPtr;
